@@ -6,6 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_directml
 
 from .base_agent import BaseAgent
 from ..memory.experience_replay_buffer import ExperienceReplayBuffer
@@ -38,6 +39,8 @@ class DQNAgent(BaseAgent):
 
         if torch.cuda.is_available():
             self.device = 'cuda'
+        elif torch_directml.device():
+            self.device = torch_directml.device()
         else:
             self.device = 'cpu'
 
@@ -330,6 +333,8 @@ class DQNAgent(BaseAgent):
 
         if self.device == 'cuda':
             loss = loss.detach().cpu().numpy()
+        elif torch_directml.device():
+            self.device = torch_directml.device()
         else:
             loss = loss.detach().numpy()
 

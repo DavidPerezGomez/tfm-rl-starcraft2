@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import torch
+import torch_directml
 from codecarbon.emissions_tracker import BaseEmissionsTracker
 from pysc2.agents import base_agent
 from pysc2.env.environment import TimeStep
@@ -29,7 +30,7 @@ from .stats import AgentStats, AggregatedEpisodeStats, EpisodeStats
 class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     _AGENT_FILE: str = "agent.pkl"
     _BUFFER_FILE: str = "buffer.pkl"
-    _STATS_FILE: str =  "stats.parquet"
+    _STATS_FILE: str = "stats.parquet"
 
     _action_to_game = {
         AllActions.NO_OP: actions.RAW_FUNCTIONS.no_op,
@@ -50,6 +51,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         if torch.cuda.is_available():
             self.device = 'cuda'
+        elif torch_directml.device():
+            self.device = torch_directml.device()
         else:
             self.device = 'cpu'
 

@@ -7,6 +7,7 @@ from typing import Any, Dict, Iterable, List, Tuple, Union
 
 import numpy as np
 import torch
+import torch_directml
 import torch.nn as nn
 import torch.nn.functional as F
 from pysc2.env.environment import TimeStep
@@ -32,8 +33,7 @@ class DQNAgent(BaseAgent):
                  hyperparams: DQNAgentParams,
                  target_network: DQNNetwork = None,
                  random_mode: bool = False,
-                 **kwargs
-                 ):
+                 **kwargs):
         """Deep Q-Network agent.
 
         Args:
@@ -308,6 +308,8 @@ class DQNAgent(BaseAgent):
 
         if self.device == 'cuda':
             loss = loss.detach().cpu().numpy()
+        elif torch_directml.device():
+            self.device = torch_directml.device()
         else:
             loss = loss.detach().numpy()
 

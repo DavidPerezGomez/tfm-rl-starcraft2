@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_directml
 from torch import optim
 
 
@@ -24,6 +25,8 @@ class DQNNetwork(nn.Module, ABC):
 
         if torch.cuda.is_available():
             self.device = 'cuda'
+        elif torch_directml.device():
+            self.device = torch_directml.device()
         else:
             self.device = 'cpu'
 
