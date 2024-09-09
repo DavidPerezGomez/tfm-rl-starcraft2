@@ -53,7 +53,7 @@ class DQNAgent(BaseAgent):
         self.min_epsilon = min_epsilon
         self.batch_size = batch_size
         self.gamma = gamma
-        
+
         # We will consider that the agent beat the environment if it gets a reward greater than
         # 'reward_threshold' for 'solve_num_episodes' consecutive episodes
         self.solve_num_episodes = solve_num_episodes
@@ -331,10 +331,8 @@ class DQNAgent(BaseAgent):
         loss.backward() # calculem la diferència per obtenir els gradients
         self.main_network.optimizer.step() # apliquem els gradients a la xarxa neuronal
 
-        if self.device == 'cuda':
+        if self.device != 'cpu':
             loss = loss.detach().cpu().numpy()
-        elif torch_directml.device():
-            self.device = torch_directml.device()
         else:
             loss = loss.detach().numpy()
 

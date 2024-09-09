@@ -306,10 +306,8 @@ class DQNAgent(BaseAgent):
         if hasattr(self.main_network, "scheduler") and (self.main_network.scheduler is not None):
             self.main_network.scheduler.step() # Apply the gradients to the main network
 
-        if self.device == 'cuda':
+        if self.device != 'cpu':
             loss = loss.detach().cpu().numpy()
-        elif torch_directml.device():
-            self.device = torch_directml.device()
         else:
             loss = loss.detach().numpy()
 
