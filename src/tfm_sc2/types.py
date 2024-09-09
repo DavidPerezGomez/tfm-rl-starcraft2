@@ -7,23 +7,23 @@ Position = namedtuple("Position", ["x", "y"])
 MapUnitInfo = namedtuple("MapUnitInfo", ["player_relative", "unit_type", "tag", "hit_points", "hit_points_ratio", "energy", "energy_ratio", "shields", "shields_ratio"])
 
 
-class PickupItems(IntEnum):
-    GasPallet500 = Neutral.PickupGasPallet500
-    HugeScrapSalvage = Neutral.PickupHugeScrapSalvage
-    MediumScrapSalvage = Neutral.PickupMediumScrapSalvage
-    MineralCrystalItem = Neutral.MineralCrystalItem
-    MineralPallet = Neutral.MineralPallet
-    MineralShards = Neutral.MineralShards
-    NaturalGas = Neutral.NaturalGas
-    NaturalMineralShards = Neutral.NaturalMineralShards
-    ProtossGasCrystalItem = Neutral.ProtossGasCrystalItem
-    SmallScrapSalvage = Neutral.PickupSmallScrapSalvage
-    TerranGasCanisterItem = Neutral.TerranGasCanisterItem
-    ZergGasPodItem = Neutral.ZergGasPodItem
-
-    @staticmethod
-    def contains(unit):
-        return unit in list(PickupItems)
+# class PickupItems(IntEnum):
+#     GasPallet500 = Neutral.PickupGasPallet500
+#     HugeScrapSalvage = Neutral.PickupHugeScrapSalvage
+#     MediumScrapSalvage = Neutral.PickupMediumScrapSalvage
+#     MineralCrystalItem = Neutral.MineralCrystalItem
+#     MineralPallet = Neutral.MineralPallet
+#     MineralShards = Neutral.MineralShards
+#     NaturalGas = Neutral.NaturalGas
+#     NaturalMineralShards = Neutral.NaturalMineralShards
+#     ProtossGasCrystalItem = Neutral.ProtossGasCrystalItem
+#     SmallScrapSalvage = Neutral.PickupSmallScrapSalvage
+#     TerranGasCanisterItem = Neutral.TerranGasCanisterItem
+#     ZergGasPodItem = Neutral.ZergGasPodItem
+#
+#     @staticmethod
+#     def contains(unit):
+#         return unit in list(PickupItems)
 
 class Minerals(IntEnum):
     BattleStationMineralField = Neutral.BattleStationMineralField
