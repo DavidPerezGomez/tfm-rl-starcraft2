@@ -143,6 +143,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def checkpoint_path(self) -> Optional[Path]:
         return self._checkpoint_path
 
+    @property
+    def burn_in_capacity(self) -> float:
+        return self._buffer.burn_in_capacity
+
     @checkpoint_path.setter
     def checkpoint_path(self, checkpoint_path: Union[str|Path]):
         checkpoint_path = Path(checkpoint_path)

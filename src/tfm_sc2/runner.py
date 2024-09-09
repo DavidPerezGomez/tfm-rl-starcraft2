@@ -1,3 +1,4 @@
+import time
 import logging
 import pickle
 from pathlib import Path
@@ -47,6 +48,7 @@ class MainLogger:
     def get(cls) -> logging.Logger:
         if cls._logger is None:
             cls._logger = logging.getLogger("main_runner")
+            cls._logger.setLevel(logging.INFO)
         return cls._logger
 
 def setup_logging(log_file: str = None):
@@ -375,7 +377,7 @@ def main(unused_argv):
         tracker.start()
         if not exploit and hasattr(agent, "memory_replay_ready"):
             is_burnin = not agent.memory_replay_ready
-            logger.info(f"Agent has a memory replay buffer. Requires burnin: {is_burnin}")
+            logger.info(f"Agent has a memory replay buffer. Requires burn-in: {is_burnin}")
             burnin_episodes = 0
             while is_burnin and (burnin_episodes < FLAGS.max_burnin_episodes):
                 try:
@@ -401,25 +403,27 @@ def main(unused_argv):
                             if episode_ended:
                                 # Perform one last step to process rewards etc
                                 last_step_actions = [a.step(timestep) for a, timestep in zip([agent, *other_agents], timesteps)]
+                        burnin_episodes += 1
                         current_episode_failures = 0
                         is_burnin = not agent.memory_replay_ready
                 except ConnectError as error:
                     logger.warning("Couldn't connect to SC2 environment, trying to restart the episode again")
                     logger.warning(error)
-                    burnin_episodes -= 1
                     current_episode_failures += 1
                     if current_episode_failures >= max_episode_failures:
                         logger.error(f"Reached max number of allowed episode failures, stopping run")
                         break
                 finally:
-                    burnin_episodes += 1
-                    logger.info(f"Burnin progress: {100 * agent._buffer.burn_in_capacity:.2f}%")
+                    logger.info(f"Burnin progress: {100 * agent.burn_in_capacity:.2f}%")
             logger.info(f"Finished burnin after {burnin_episodes} episodes")
 
         num_wins = 0
         num_wins_enemy = 0
         num_games = 0
+        logger.info("Beginning agent training")
         while finished_episodes < FLAGS.num_episodes:
+            logger.info(f"Starting episode {finished_episodes+1}")
+            t0 = time.time()
             already_saved = False
             try:
                 with sc2_env.SC2Env(
@@ -442,6 +446,11 @@ def main(unused_argv):
                         timesteps = env.step(step_actions)
                         episode_ended = timesteps[0].last()
                         if episode_ended:
+                            finished_episodes += 1
+                            t1 = time.time()
+                            t_delta = t1 - t0
+                            logger.info(f"Episode {finished_episodes}/{FLAGS.num_episodes} completed in {t_delta:.2f} seconds ({t_delta / 60:.2f} minutes)")
+
                             # Perform one last step to process rewards etc
                             last_step_actions = [a.step(timestep) for a, timestep in zip([agent, *other_agents], timesteps)]
 
@@ -454,13 +463,11 @@ def main(unused_argv):
             except ConnectError as error:
                 logger.error("Couldn't connect to SC2 environment, trying to restart the episode again")
                 logger.error(error)
-                finished_episodes -= 1
                 current_episode_failures += 1
                 if current_episode_failures >= max_episode_failures:
                     logger.error(f"Reached max number of allowed episode failures, stopping run")
                     break
             finally:
-                finished_episodes += 1
                 if save_agent and (finished_episodes % FLAGS.save_frequency_episodes) == 0:
                     logger.info(f"Saving agent after {finished_episodes} episodes")
                     agent.save(save_path)
