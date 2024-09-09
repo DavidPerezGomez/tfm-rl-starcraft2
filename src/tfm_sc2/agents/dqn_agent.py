@@ -207,7 +207,7 @@ class DQNAgent(BaseAgent):
                             self._status_flags["main_net_updated"] = True
                         self._current_episode_stats.losses = self.update_main_network(self._current_episode_stats.losses)
                         main_net_updated = True
-                if self.hyperparams.target_network_sync_frequency > -1:
+                if self.hyperparams.target_network_sync_frequency > 0:
                     if (self._current_episode_stats.steps % self.hyperparams.target_network_sync_frequency) == 0:
                         if not self._status_flags["target_net_updated"]:
                             self.logger.info(f"First target network update")
