@@ -1,15 +1,17 @@
 #!/bin/bash
 
+EXPERIMENT_NAME="2024-09-12"
+
 SCRIPTS_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-export SRC_DIR=$(realpath "$(dirname "${SCRIPTS_DIR}")")
-export PYTHON_SCRIPTS_DIR=$(realpath "${SRC_DIR}/tfm_sc2")
+export SRC_DIR=$(realpath "$(dirname "$(dirname "${SCRIPTS_DIR}")")")
 export BASE_MODELS_DIR=$(realpath "$(dirname "${SRC_DIR}")/models")
 export AGENT_TYPE="multi"
 export AGENT_ALGORITHM="dqn"
 export REWARD_METHOD="reward"
 export MEMORY_SIZE=10000
 export BURN_IN=1000
-MODELS_DIR="${BASE_MODELS_DIR}/05_shorter"
+export BATCH_SIZE=512
+MODELS_DIR="${BASE_MODELS_DIR}/${EXPERIMENT_NAME}_shorter"
 
 # Base Manager
 export AGENT_SUBTYPE="base_manager"
@@ -18,7 +20,7 @@ export MAP=CollectMineralsAndGas
 export TRAIN_EPISODES=100
 export EPSILON_DECAY=0.98 # 300 EP
 export LEARNING_RATE_MILESTONES="40 70 90"
-export LOG_SUFFIX="_01"
+export LOG_SUFFIX="_${EXPERIMENT_NAME}"
 export LEARNING_RATE_MILESTONES="40 70 90"
 export LEARNING_RATE=0.001
 export BASE_MANAGER_DQN_SIZE="medium" # extra_small, small, medium, large, extra_large
@@ -32,7 +34,7 @@ BASE_MANAGER_MODEL_DIR="${MODELS_DIR}/${MODEL_ID}"
 # echo "Training Base Manager on ${MAP}"
 # touch ${BASE_MANAGER_MODEL_DIR}/_01_training_start_${TRAIN_EPISODES}_ep
 
-# python ${PYTHON_SCRIPTS_DIR}/runner.py \
+# python ${SRC_DIR}/runner.py \
 #     --agent_key "${AGENT_KEY}" \
 #     --map_name "${MAP}" \
 #     --num_episodes ${TRAIN_EPISODES} \
@@ -45,6 +47,7 @@ BASE_MANAGER_MODEL_DIR="${MODELS_DIR}/${MODEL_ID}"
 #     --dqn_size ${BASE_MANAGER_DQN_SIZE} \
 #     --memory_size ${MEMORY_SIZE} \
 #     --burn_in ${BURN_IN} \
+#     --batch_size ${BATCH_SIZE} \
 #     --reward_method ${REWARD_METHOD} 2>&1 | tee ${BASE_MANAGER_MODEL_DIR}/${MAP}${LOG_SUFFIX}.log
 # touch ${BASE_MANAGER_MODEL_DIR}/_02_training_done_${TRAIN_EPISODES}_ep
 
@@ -54,7 +57,7 @@ export BASE_MODEL_ID=multi_dqn_${AGENT_SUBTYPE}
 export MAP=BuildMarines
 export TRAIN_EPISODES=50
 export EPSILON_DECAY=0.96 # 300 EP
-export LOG_SUFFIX="_01"
+export LOG_SUFFIX="_${EXPERIMENT_NAME}"
 export LEARNING_RATE_MILESTONES="30 40 45"
 export LEARNING_RATE=0.001
 export ARMY_RECRUIT_MANAGER_DQN_SIZE="small" # extra_small, small, medium, large, extra_large
@@ -68,7 +71,7 @@ ARMY_RECRUIT_MANAGER_MODEL_DIR="${MODELS_DIR}/${MODEL_ID}"
 # echo "Training Army Recruit Manager on ${MAP}"
 # touch ${ARMY_RECRUIT_MANAGER_MODEL_DIR}/_01_training_start_${TRAIN_EPISODES}_ep
 
-# python ${PYTHON_SCRIPTS_DIR}/runner.py \
+# python ${SRC_DIR}/runner.py \
 #     --agent_key "${AGENT_KEY}" \
 #     --map_name "${MAP}" \
 #     --num_episodes ${TRAIN_EPISODES} \
@@ -81,6 +84,7 @@ ARMY_RECRUIT_MANAGER_MODEL_DIR="${MODELS_DIR}/${MODEL_ID}"
 #     --dqn_size ${ARMY_RECRUIT_MANAGER_DQN_SIZE} \
 #     --memory_size ${MEMORY_SIZE} \
 #     --burn_in ${BURN_IN} \
+#     --batch_size ${BATCH_SIZE} \
 #     --reward_method ${REWARD_METHOD} 2>&1 | tee ${ARMY_RECRUIT_MANAGER_MODEL_DIR}/${MAP}${LOG_SUFFIX}.log
 # touch ${ARMY_RECRUIT_MANAGER_MODEL_DIR}/_02_training_done_${TRAIN_EPISODES}_ep
 
@@ -90,7 +94,7 @@ export BASE_MODEL_ID=multi_dqn_${AGENT_SUBTYPE}
 export MAP=DefeatZerglingsAndBanelings
 export TRAIN_EPISODES=150
 export EPSILON_DECAY=0.985 # 300 EP
-export LOG_SUFFIX="_01"
+export LOG_SUFFIX="_${EXPERIMENT_NAME}"
 export LEARNING_RATE_MILESTONES="100 150 175"
 export LEARNING_RATE=0.001
 export ARMY_ATTACK_MANAGER_DQN_SIZE="extra_small" # extra_small, small, medium, large, extra_large
@@ -104,7 +108,7 @@ ARMY_ATTACK_MANAGER_MODEL_DIR="${MODELS_DIR}/${MODEL_ID}"
 # echo "Training Army Attack Manager on ${MAP}"
 # touch ${ARMY_ATTACK_MANAGER_MODEL_DIR}/_01_training_start_${TRAIN_EPISODES}_ep
 
-# python ${PYTHON_SCRIPTS_DIR}/runner.py \
+# python ${SRC_DIR}/runner.py \
 #     --agent_key "${AGENT_KEY}" \
 #     --map_name "${MAP}" \
 #     --num_episodes ${TRAIN_EPISODES} \
@@ -117,6 +121,7 @@ ARMY_ATTACK_MANAGER_MODEL_DIR="${MODELS_DIR}/${MODEL_ID}"
 #     --dqn_size ${ARMY_ATTACK_MANAGER_DQN_SIZE} \
 #     --memory_size ${MEMORY_SIZE} \
 #     --burn_in ${BURN_IN} \
+#     --batch_size ${BATCH_SIZE} \
 #     --reward_method ${REWARD_METHOD} 2>&1 | tee ${ARMY_ATTACK_MANAGER_MODEL_DIR}/${MAP}${LOG_SUFFIX}.log
 # touch ${ARMY_ATTACK_MANAGER_MODEL_DIR}/_02_training_done_${TRAIN_EPISODES}_ep
 
@@ -126,7 +131,7 @@ export BASE_MODEL_ID=multi_dqn_${AGENT_SUBTYPE}
 export MAP=Simple64
 export TRAIN_EPISODES=50
 export EPSILON_DECAY=0.93
-export LOG_SUFFIX="_01"
+export LOG_SUFFIX="_${EXPERIMENT_NAME}"
 export LEARNING_RATE_MILESTONES="38 44 48"
 export LEARNING_RATE=0.001
 export GAME_MANAGER_DQN_SIZE="small" # extra_small, small, medium, large, extra_large
@@ -145,7 +150,7 @@ cp -r "${ARMY_ATTACK_MANAGER_MODEL_DIR}" "${MODEL_DIR}"/army_attack_manager
 echo "Training Game Manager on ${MAP}"
 touch "${MODEL_DIR}"/_01_training_start_${TRAIN_EPISODES}_ep
 
-python "${PYTHON_SCRIPTS_DIR}"/runner.py \
+python "${SRC_DIR}"/runner.py \
     --agent_key "${AGENT_KEY}" \
     --map_name "${MAP}" \
     --num_episodes ${TRAIN_EPISODES} \
@@ -158,6 +163,7 @@ python "${PYTHON_SCRIPTS_DIR}"/runner.py \
     --dqn_size ${GAME_MANAGER_DQN_SIZE} \
     --memory_size ${MEMORY_SIZE} \
     --burn_in ${BURN_IN} \
+    --batch_size ${BATCH_SIZE} \
     --reward_method ${REWARD_METHOD} 2>&1 | tee "${MODEL_DIR}"/${MAP}${LOG_SUFFIX}.log
 touch "${MODEL_DIR}"/_02_training_done_${TRAIN_EPISODES}_ep
 
@@ -176,7 +182,7 @@ cp -r "${ARMY_ATTACK_MANAGER_MODEL_DIR}" "${MODEL_DIR}"/army_attack_manager
 echo "Training Game Manager on ${MAP}"
 touch "${MODEL_DIR}"/_01_training_start_${TRAIN_EPISODES}_ep
 
-python "${PYTHON_SCRIPTS_DIR}"/runner.py \
+python "${SRC_DIR}"/runner.py \
     --agent_key "${AGENT_KEY}" \
     --map_name "${MAP}" \
     --num_episodes ${TRAIN_EPISODES} \
@@ -189,6 +195,7 @@ python "${PYTHON_SCRIPTS_DIR}"/runner.py \
     --dqn_size ${GAME_MANAGER_DQN_SIZE} \
     --memory_size ${MEMORY_SIZE} \
     --burn_in ${BURN_IN} \
+    --batch_size ${BATCH_SIZE} \
     --reward_method ${REWARD_METHOD} 2>&1 | tee "${MODEL_DIR}"/${MAP}${LOG_SUFFIX}.log
 touch "${MODEL_DIR}"/_02_training_done_${TRAIN_EPISODES}_ep
 
@@ -207,7 +214,7 @@ cp -r "${ARMY_ATTACK_MANAGER_MODEL_DIR}" "${MODEL_DIR}"/army_attack_manager
 echo "Training Game Manager on ${MAP}"
 touch "${MODEL_DIR}"/_01_training_start_${TRAIN_EPISODES}_ep
 
-python "${PYTHON_SCRIPTS_DIR}"/runner.py \
+python "${SRC_DIR}"/runner.py \
     --agent_key "${AGENT_KEY}" \
     --map_name "${MAP}" \
     --num_episodes ${TRAIN_EPISODES} \
@@ -220,6 +227,7 @@ python "${PYTHON_SCRIPTS_DIR}"/runner.py \
     --dqn_size ${GAME_MANAGER_DQN_SIZE} \
     --memory_size ${MEMORY_SIZE} \
     --burn_in ${BURN_IN} \
+    --batch_size ${BATCH_SIZE} \
     --reward_method ${REWARD_METHOD} 2>&1 | tee "${MODEL_DIR}"/${MAP}${LOG_SUFFIX}.log
 touch "${MODEL_DIR}"/_02_training_done_${TRAIN_EPISODES}_ep
 
@@ -238,7 +246,7 @@ cp -r "${ARMY_ATTACK_MANAGER_MODEL_DIR}" "${MODEL_DIR}"/army_attack_manager
 echo "Training Game Manager on ${MAP}"
 touch "${MODEL_DIR}"/_01_training_start_${TRAIN_EPISODES}_ep
 
-python "${PYTHON_SCRIPTS_DIR}"/runner.py \
+python "${SRC_DIR}"/runner.py \
     --agent_key "${AGENT_KEY}" \
     --map_name "${MAP}" \
     --num_episodes ${TRAIN_EPISODES} \
@@ -251,10 +259,11 @@ python "${PYTHON_SCRIPTS_DIR}"/runner.py \
     --dqn_size ${GAME_MANAGER_DQN_SIZE} \
     --memory_size ${MEMORY_SIZE} \
     --burn_in ${BURN_IN} \
+    --batch_size ${BATCH_SIZE} \
     --reward_method ${REWARD_METHOD} 2>&1 | tee "${MODEL_DIR}"/${MAP}${LOG_SUFFIX}.log
 touch "${MODEL_DIR}"/_02_training_done_${TRAIN_EPISODES}_ep
 
-echo "Training05"
+echo "Training01"
 
 echo "Moving ${MODEL_DIR} to ${MODEL_DIR}_train04"
 mv "${MODEL_DIR}" "${MODEL_DIR}"_train04
@@ -269,7 +278,7 @@ cp -r "${ARMY_ATTACK_MANAGER_MODEL_DIR}" "${MODEL_DIR}"/army_attack_manager
 echo "Training Game Manager on ${MAP}"
 touch "${MODEL_DIR}"/_01_training_start_${TRAIN_EPISODES}_ep
 
-python "${PYTHON_SCRIPTS_DIR}"/runner.py \
+python "${SRC_DIR}"/runner.py \
     --agent_key "${AGENT_KEY}" \
     --map_name "${MAP}" \
     --num_episodes ${TRAIN_EPISODES} \
@@ -282,5 +291,6 @@ python "${PYTHON_SCRIPTS_DIR}"/runner.py \
     --dqn_size ${GAME_MANAGER_DQN_SIZE} \
     --memory_size ${MEMORY_SIZE} \
     --burn_in ${BURN_IN} \
+    --batch_size ${BATCH_SIZE} \
     --reward_method ${REWARD_METHOD} 2>&1 | tee "${MODEL_DIR}"/${MAP}${LOG_SUFFIX}.log
 touch "${MODEL_DIR}"/_02_training_done_${TRAIN_EPISODES}_ep
