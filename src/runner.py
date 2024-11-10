@@ -180,7 +180,7 @@ def main(unused_argv):
     FLAGS = flags.FLAGS
     setup_logging(FLAGS.log_file)
     logger = MainLogger.get()
-    SC2_CONFIG["visualize"] = not FLAGS.no_visualize
+    SC2_CONFIG["visualize"] = FLAGS.visualize
 
     map_name = FLAGS.map_name
     if map_name not in MAP_CONFIGS:
@@ -533,7 +533,7 @@ if __name__ == "__main__":
     flags.DEFINE_boolean("save_agent", default=True, required=False, help="Whether to save the agent and/or its stats.")
     flags.DEFINE_boolean("random_mode", default=False, required=False, help="Tell the agent to run in random mode. Used mostly to ensure we collect experiences.")
     flags.DEFINE_boolean("export_stats_only", default=False, required=False, help="Set it to true if you only want to load the agent and export its stats.")
-    flags.DEFINE_boolean("no_visualize", default=True, required=False, help="Set it to true if you don't want to visualize the games.")
+    flags.DEFINE_boolean("visualize", default=False, required=False, help="Set this flag to visualize the games.")
     flags.DEFINE_boolean("load_networks_only", default=False, required=False, help="Provide this flag if you want to load DQN agents, but only load its networks (no buffers, params, etc). Might be useful for curriculum training.")
     flags.DEFINE_string("log_file", default=None, required=False, help="File to save detailed logs to")
     app.run(main)
