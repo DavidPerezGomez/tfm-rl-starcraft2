@@ -120,5 +120,17 @@ MAP_CONFIGS = dict(
         reward_factor=120,
         # Baseline reward of 100
         get_score_method="get_reward_as_score",
+    ),
+    DefeatMarinesAndBuildings5m=dict(
+        map_name="DefeatMarinesAndBuildings5m",
+        positions={
+            units.Terran.CommandCenter: [],
+            units.Terran.SupplyDepot: [],
+            units.Terran.Barracks: [],
+        },
+        multiple_positions=False,
+        players=[sc2_env.Agent(sc2_env.Race.terran)],
+        available_actions=list(ArmyAttackManagerActions),
+        get_score_method="get_reward_as_score",
     )
 )
