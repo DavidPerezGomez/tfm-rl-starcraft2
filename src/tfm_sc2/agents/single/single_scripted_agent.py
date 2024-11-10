@@ -29,7 +29,7 @@ class SingleScriptedAgent(BaseAgent):
                 list(ArmyAttackManagerActions)
             ))
         self.__agent_actions = [a for a in self.__original_agent_actions if a in self._map_config["available_actions"]]
-        self._action_order = [AllActions.ATTACK_WITH_SINGLE_UNIT, AllActions.RECRUIT_MARINE, AllActions.BUILD_BARRACKS, AllActions.BUILD_SUPPLY_DEPOT, AllActions.BUILD_COMMAND_CENTER, AllActions.HARVEST_MINERALS, AllActions.RECRUIT_SCV]
+        self._action_order = [AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT, AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT, AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT, AllActions.RECRUIT_MARINE, AllActions.BUILD_BARRACKS, AllActions.BUILD_SUPPLY_DEPOT, AllActions.BUILD_COMMAND_CENTER, AllActions.HARVEST_MINERALS, AllActions.RECRUIT_SCV]
 
     @property
     def agent_actions(self) -> List[AllActions]:

@@ -82,7 +82,7 @@ DQNAgentParams = namedtuple('DQNAgentParams',
 State = namedtuple('State',
                             field_names=[
                                 "can_harvest_minerals", "can_recruit_worker", "can_build_supply_depot", "can_build_command_center",
-                                "can_build_barracks",  "can_recruit_marine",  "can_attack",
+                                "can_build_barracks",  "can_recruit_marine",  "can_attack_buildings", "can_attack_workers", "can_attack_army",
                                 # Actions available on the map
                                 # "map_actions",
                                 # Command centers
@@ -111,5 +111,5 @@ State = namedtuple('State',
                                 # Neutral units
                                 "num_minerals",
                                 # Enemy info
-                                "enemy_total_building_health", "enemy_total_army_health",
+                                "enemy_total_building_health", "enemy_total_army_health", "enemy_total_worker_health",
                             ])

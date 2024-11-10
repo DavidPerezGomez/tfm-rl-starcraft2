@@ -40,7 +40,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         AllActions.BUILD_COMMAND_CENTER: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Build_CommandCenter_pt("now", source_unit_tag, target_position),
         AllActions.BUILD_BARRACKS: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Build_Barracks_pt("now", source_unit_tag, target_position),
         AllActions.RECRUIT_MARINE: lambda source_unit_tag: actions.RAW_FUNCTIONS.Train_Marine_quick("now", source_unit_tag),
-        AllActions.ATTACK_WITH_SINGLE_UNIT: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Attack_pt("now", source_unit_tag, target_position),
+        AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Attack_pt("now", source_unit_tag, target_position),
+        AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Attack_pt("now", source_unit_tag, target_position),
+        AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Attack_pt("now", source_unit_tag, target_position),
     }
 
     def __init__(self,
@@ -455,21 +457,32 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     barracks = [cc for cc in barracks if cc.order_length < Constants.BARRACKS_QUEUE_LENGTH]
                     assert len(barracks) > 0, "There are no barracks available"
                     action_args = dict(source_unit_tag=random.choice(barracks).tag)
-                case AllActions.ATTACK_WITH_SINGLE_UNIT:
+                case AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT:
                     idle_marines = self.get_idle_marines(obs)
                     assert len(idle_marines) > 0, "There are no idle marines"
-                    enemies = self.get_enemy_units(obs, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
-                    if len(enemies) == 0:
-                        enemies = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
-                    if len(enemies) == 0:
-                        enemies = self.get_enemy_units(obs)
+                    enemies = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemies"
-                    enemy_positions = [Position(e.x, e.y) for e in enemies]
-                    mean_enemy_position = np.mean(enemy_positions, axis=0)
-                    target_position = Position(int(mean_enemy_position[0]), int(mean_enemy_position[1]))
-                    closest_enemy, _ = self.get_closest(enemies, target_position)
-                    target_position = Position(closest_enemy.x, closest_enemy.y)
-                    marine_tag = random.choice(idle_marines).tag
+                    marine = random.choice(idle_marines)
+                    target_position = self.get_mean_enemy_position(enemies)
+                    marine_tag = marine.tag
+                    action_args = dict(source_unit_tag=marine_tag, target_position=target_position)
+                case AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT:
+                    idle_marines = self.get_idle_marines(obs)
+                    assert len(idle_marines) > 0, "There are no idle marines"
+                    enemies = self.get_enemy_units(obs, unit_types=Constants.WORKER_UNIT_TYPES)
+                    assert len(enemies) > 0, "There are no enemies"
+                    marine = random.choice(idle_marines)
+                    target_position = self.get_mean_enemy_position(enemies)
+                    marine_tag = marine.tag
+                    action_args = dict(source_unit_tag=marine_tag, target_position=target_position)
+                case AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT:
+                    idle_marines = self.get_idle_marines(obs)
+                    assert len(idle_marines) > 0, "There are no idle marines"
+                    enemies = self.get_enemy_units(obs, unit_types=Constants.ARMY_UNIT_TYPES)
+                    assert len(enemies) > 0, "There are no enemies"
+                    marine = random.choice(idle_marines)
+                    target_position = self.get_mean_enemy_position(enemies)
+                    marine_tag = marine.tag
                     action_args = dict(source_unit_tag=marine_tag, target_position=target_position)
                 case _:
                     raise RuntimeError(f"Missing logic to select action args for action {action.name}")
@@ -556,6 +569,18 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
         barrack_positions = [Position(b.x, b.y) for b in barracks]
         self._used_barrack_positions = barrack_positions
+
+    def get_closest_enemy_position(self, enemies, marine):
+        marine_position = Position(marine.x, marine.y)
+        closest_enemy, _ = self.get_closest(enemies, marine_position)
+        return Position(closest_enemy.x, closest_enemy.y)
+
+    def get_mean_enemy_position(self, enemies):
+        enemy_positions = [Position(e.x, e.y) for e in enemies]
+        mean_enemy_position = np.mean(enemy_positions, axis=0)
+        target_position = Position(int(mean_enemy_position[0]), int(mean_enemy_position[1]))
+        closest_enemy, _ = self.get_closest(enemies, target_position)
+        return Position(closest_enemy.x, closest_enemy.y)
 
     def get_reward_and_score(self, obs: TimeStep) -> Tuple[float, float, float]:
         reward = obs.reward
@@ -956,11 +981,29 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     return False
 
                 return True
-            case AllActions.ATTACK_WITH_SINGLE_UNIT, _:
+            case AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT, _:
                 idle_marines = self.get_idle_marines(obs)
                 if len(idle_marines) == 0:
                     return False
-                enemies = self.get_enemy_units(obs)
+                enemies = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
+                if len(enemies) == 0:
+                    return False
+
+                return True
+            case AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT, _:
+                idle_marines = self.get_idle_marines(obs)
+                if len(idle_marines) == 0:
+                    return False
+                enemies = self.get_enemy_units(obs, unit_types=Constants.WORKER_UNIT_TYPES)
+                if len(enemies) == 0:
+                    return False
+
+                return True
+            case AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT, _:
+                idle_marines = self.get_idle_marines(obs)
+                if len(idle_marines) == 0:
+                    return False
+                enemies = self.get_enemy_units(obs, unit_types=Constants.ARMY_UNIT_TYPES)
                 if len(enemies) == 0:
                     return False
 
@@ -1271,10 +1314,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
     def _get_enemy_state(self, obs: TimeStep) -> Dict[str, int|float]:
         enemy_buildings = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
+        enemy_workers = self.get_enemy_units(obs, unit_types=Constants.WORKER_UNIT_TYPES)
         enemy_army = self.get_enemy_units(obs, unit_types=Constants.ARMY_UNIT_TYPES)
 
         return dict(
             enemy_total_building_health=sum(map(lambda b: b.health, enemy_buildings)),
+            enemy_total_worker_health=sum(map(lambda b: b.health, enemy_workers)),
             enemy_total_army_health=sum(map(lambda b: b.health, enemy_army)),
         )
 
@@ -1287,5 +1332,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             can_build_command_center=int(AllActions.BUILD_COMMAND_CENTER in available_actions),
             can_build_barracks=int(AllActions.BUILD_BARRACKS in available_actions),
             can_recruit_marine=int(AllActions.RECRUIT_MARINE in available_actions),
-            can_attack=int(AllActions.ATTACK_WITH_SINGLE_UNIT in available_actions),
+            can_attack_buildings=int(AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT in available_actions),
+            can_attack_workers=int(AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT in available_actions),
+            can_attack_army=int(AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT in available_actions),
         )

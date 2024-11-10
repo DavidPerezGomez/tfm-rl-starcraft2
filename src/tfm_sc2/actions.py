@@ -3,22 +3,27 @@ from enum import IntEnum
 
 class AllActions(IntEnum):
     NO_OP = 0
+
     # Resource manager actions
     HARVEST_MINERALS = 11
     # COLLECT_GAS      = 12
     # BUILD_REFINERY   = 13
+
     # Base Manager actions
     RECRUIT_SCV          = 21
     BUILD_SUPPLY_DEPOT   = 22
     BUILD_COMMAND_CENTER = 24
+
     # ArmyRecruit Manager actions
     BUILD_BARRACKS = 31
     RECRUIT_MARINE = 32
     # BUILD_TECH_LAB = 33
     # RECRUIT_DOCTOR = 34
-    # ArmyAttack Manager actions
 
-    ATTACK_WITH_SINGLE_UNIT   = 41
+    # ArmyAttack Manager actions
+    ATTACK_BUILDING_WITH_SINGLE_UNIT    = 41
+    ATTACK_WORKER_WITH_SINGLE_UNIT      = 42
+    ATTACK_ARMY_WITH_SINGLE_UNIT        = 43
     # ATTACK_WITH_SQUAD_5       = 42
     # ATTACK_WITH_SQUAD_10      = 43
     # ATTACK_WITH_SQUAD_15      = 44
@@ -55,7 +60,9 @@ class ArmyRecruitManagerActions(IntEnum):
 
 class ArmyAttackManagerActions(IntEnum):
     NO_OP                     = AllActions.NO_OP
-    ATTACK_WITH_SINGLE_UNIT   = AllActions.ATTACK_WITH_SINGLE_UNIT
+    ATTACK_BUILDING_WITH_SINGLE_UNIT    = AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT
+    ATTACK_WORKER_WITH_SINGLE_UNIT      = AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT
+    ATTACK_ARMY_WITH_SINGLE_UNIT        = AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT
     # ATTACK_WITH_SQUAD_5       = AllActions.ATTACK_WITH_SQUAD_5
     # ATTACK_WITH_SQUAD_10      = AllActions.ATTACK_WITH_SQUAD_10
     # ATTACK_WITH_SQUAD_15      = AllActions.ATTACK_WITH_SQUAD_15
