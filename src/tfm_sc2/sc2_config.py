@@ -8,7 +8,7 @@ SC2_CONFIG = dict(
                     feature_dimensions=features.Dimensions(screen=256, minimap=64),
                     use_raw_units=True,
                     use_raw_actions=True),
-    step_mul=32,#48
+    step_mul=16,#32,#48
     game_steps_per_episode=0,
     visualize=True,
     disable_fog=True
@@ -121,8 +121,8 @@ MAP_CONFIGS = dict(
         # Baseline reward of 100
         get_score_method="get_reward_as_score",
     ),
-    DefeatMarinesAndBuildings5m=dict(
-        map_name="DefeatMarinesAndBuildings5m",
+    DefeatBase=dict(
+        map_name="DefeatBase",
         positions={
             units.Terran.CommandCenter: [],
             units.Terran.SupplyDepot: [],
@@ -131,6 +131,30 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(ArmyAttackManagerActions),
-        get_score_method="get_reward_as_score",
+        get_score_method="get_enemy_buildings_health",
+    ),
+    DefeatBasePunish=dict(
+        map_name="DefeatBasePunish",
+        positions={
+            units.Terran.CommandCenter: [],
+            units.Terran.SupplyDepot: [],
+            units.Terran.Barracks: [],
+        },
+        multiple_positions=False,
+        players=[sc2_env.Agent(sc2_env.Race.terran)],
+        available_actions=list(ArmyAttackManagerActions),
+        get_score_method="get_enemy_buildings_health",
+    ),
+    DefeatBaseNoPunish=dict(
+        map_name="DefeatBaseNoPunish",
+        positions={
+            units.Terran.CommandCenter: [],
+            units.Terran.SupplyDepot: [],
+            units.Terran.Barracks: [],
+        },
+        multiple_positions=False,
+        players=[sc2_env.Agent(sc2_env.Race.terran)],
+        available_actions=list(ArmyAttackManagerActions),
+        get_score_method="get_enemy_buildings_health",
     )
 )
