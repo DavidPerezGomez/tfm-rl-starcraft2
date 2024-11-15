@@ -59,13 +59,15 @@ def setup_logging(log_file: str = None):
     absl_logger = logging.getLogger("absl")
     absl_logger.setLevel(logging.WARNING)
 
-def load_dqn_agent(cls, map_name, map_config, checkpoint_path: Path, exploit: bool, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
+def load_dqn_agent(cls, map_name, map_config, checkpoint_path: Path, exploit: bool, action_masking: bool, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
     MainLogger.get().info(f"Loading agent from file {checkpoint_path}")
     agent = cls.load(checkpoint_path, map_name=map_name, map_config=map_config, buffer=buffer, **extra_agent_args)
     if exploit:
         agent.exploit()
     else:
         agent.train()
+
+    agent.set_action_masking(action_masking)
 
     return agent
 
@@ -115,7 +117,7 @@ def create_dqn(cls = None):
 
     return dqn
 
-def create_dqn_agent(cls, map_name, map_config, main_network: DQNNetwork, checkpoint_path: Path, log_name: str, exploit: bool, reward_method: RewardMethod, memory_size: int = 100000, burn_in: int = 10000, target_network: DQNNetwork = None, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
+def create_dqn_agent(cls, map_name, map_config, main_network: DQNNetwork, checkpoint_path: Path, log_name: str, exploit: bool, action_masking: bool, reward_method: RewardMethod, memory_size: int = 100000, burn_in: int = 10000, target_network: DQNNetwork = None, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
     if buffer is None:
         buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
 
@@ -123,7 +125,7 @@ def create_dqn_agent(cls, map_name, map_config, main_network: DQNNetwork, checkp
     agent_params = DQNAgentParams(epsilon=FLAGS.epsilon, epsilon_decay=FLAGS.epsilon_decay, min_epsilon=FLAGS.min_epsilon, batch_size=FLAGS.batch_size, gamma=FLAGS.gamma, main_network_update_frequency=FLAGS.main_network_update_frequency, target_network_sync_frequency=FLAGS.target_network_sync_frequency, target_sync_mode=FLAGS.target_sync_mode, update_tau=FLAGS.update_tau)
     # agent_params = DQNAgentParams(epsilon=0.9, epsilon_decay=FLAGS.epsilon_decay, min_epsilon=0.01, batch_size=512, gamma=0.99, main_network_update_frequency=50, target_network_sync_frequency=-1, target_sync_mode="soft", update_tau=0.1)
     # agent_params = DQNAgentParams(epsilon=0.9, epsilon_decay=0.99, min_epsilon=0.01, batch_size=512, gamma=0.99, main_network_update_frequency=-1, target_network_sync_frequency=-1, target_sync_mode="soft", update_tau=0.5)
-    agent = cls(map_name=map_name, map_config=map_config, main_network=main_network, target_network=target_network, buffer=buffer, hyperparams=agent_params, checkpoint_path=checkpoint_path, log_name=log_name, reward_method=reward_method, **extra_agent_args)
+    agent = cls(map_name=map_name, map_config=map_config, main_network=main_network, target_network=target_network, buffer=buffer, hyperparams=agent_params, checkpoint_path=checkpoint_path, log_name=log_name, reward_method=reward_method, action_masking=action_masking, **extra_agent_args)
 
     if exploit:
         agent.exploit()
@@ -132,21 +134,21 @@ def create_dqn_agent(cls, map_name, map_config, main_network: DQNNetwork, checkp
 
     return agent
 
-def load_or_create_dqn_agent(cls, map_name, map_config, load_agent: bool, checkpoint_path: Path, exploit: bool, log_name: str, load_networks_only: bool, reward_method: RewardMethod, memory_size: int = 100000, burn_in: int = 10000, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
+def load_or_create_dqn_agent(cls, map_name, map_config, load_agent: bool, checkpoint_path: Path, exploit: bool, action_masking: bool, log_name: str, load_networks_only: bool, reward_method: RewardMethod, memory_size: int = 100000, burn_in: int = 10000, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
     if load_networks_only:
         if buffer is None:
             buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
         main_network = load_dqn(checkpoint_path / SingleDQNAgent._MAIN_NETWORK_FILE)
         target_network = load_dqn(checkpoint_path / SingleDQNAgent._TARGET_NETWORK_FILE)
-        agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, main_network=main_network, target_network=target_network, buffer=buffer, log_name=log_name, exploit=exploit, reward_method=reward_method, **extra_agent_args)
+        agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, main_network=main_network, target_network=target_network, buffer=buffer, log_name=log_name, exploit=exploit, action_masking=action_masking, reward_method=reward_method, **extra_agent_args)
     elif not load_agent:
         main_network = create_dqn(cls)
         if buffer is None:
             buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-        agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, main_network=main_network, buffer=buffer, log_name=log_name, exploit=exploit, reward_method=reward_method, **extra_agent_args)
+        agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, main_network=main_network, buffer=buffer, log_name=log_name, exploit=exploit, action_masking=action_masking, reward_method=reward_method, **extra_agent_args)
     else:
         # HEre we allow buffer to be None. In that case, the agent's buffer is loaded, otherwise it will be replaced
-        agent = load_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, exploit=exploit, buffer=buffer,  **extra_agent_args)
+        agent = load_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, exploit=exploit, action_masking=action_masking, buffer=buffer,  **extra_agent_args)
         if FLAGS.reset_epsilon:
             agent.epsilon = agent.initial_epsilon
 
@@ -180,6 +182,7 @@ def main(unused_argv):
     FLAGS = flags.FLAGS
     setup_logging(FLAGS.log_file)
     logger = MainLogger.get()
+    logger.info(f"Running with flags {FLAGS.flags_into_string()}")
     SC2_CONFIG["visualize"] = FLAGS.visualize
 
     map_name = FLAGS.map_name
@@ -209,6 +212,7 @@ def main(unused_argv):
         logger.info(f"A new agent will be created")
     save_agent = True
     exploit = FLAGS.exploit
+    action_masking = FLAGS.action_masking
     # We will still save the stats when exploiting, but in a subfolder
     if exploit:
         save_path = checkpoint_path / "exploit"
@@ -273,7 +277,7 @@ def main(unused_argv):
                 #     other_agents.append(_create_random_enemy_gm())
     elif (len(map_config["players"]) > 1):
         logger.info("Loading SingleRandom agent as enemy")
-        enemy_agent = load_or_create_dqn_agent(SingleDQNAgent, exploit=exploit, checkpoint_path=FLAGS.agent2_path, load_agent=True, map_name=map_name, map_config=map_config, reward_method=reward_method, log_name="Enemy Agent - SingleDQN", load_networks_only=False)
+        enemy_agent = load_or_create_dqn_agent(SingleDQNAgent, exploit=exploit, checkpoint_path=FLAGS.agent2_path, load_agent=True, map_name=map_name, map_config=map_config, reward_method=reward_method, log_name="Enemy Agent - SingleDQN", load_networks_only=False, action_masking=action_masking)
         other_agents.append(enemy_agent)
 
     if buffer_file is None:
@@ -285,22 +289,28 @@ def main(unused_argv):
             buffer = pickle.load(f)
 
     base_args = dict(map_name=map_name, map_config=map_config, reward_method=reward_method)
-    common_args = dict(buffer=buffer, load_agent=load_agent,  **base_args)
+    common_args = dict(buffer=buffer, load_agent=load_agent, action_masking=action_masking,  **base_args)
     dqn_agent_args = dict(exploit=exploit, load_networks_only=load_networks_only, checkpoint_path=checkpoint_path, **common_args)
     subagent_args = dict(buffer=None, exploit=True, load_networks_only=False, **base_args)
     match FLAGS.agent_key:
         case "single.random":
-            agent = load_or_create_random_agent(cls=SingleRandomAgent, **common_args, log_name="Main Agent - Random")
+            log_name = "Main Agent - Random"
+            agent = load_or_create_random_agent(cls=SingleRandomAgent, **common_args, log_name=log_name)
         case "single.scripted":
-            agent = load_or_create_random_agent(cls=SingleScriptedAgent, **common_args, log_name="Main Agent - Scripted")
+            log_name="Main Agent - Scripted"
+            agent = load_or_create_random_agent(cls=SingleScriptedAgent, **common_args, log_name=log_name)
         case "single.dqn":
-            agent = load_or_create_dqn_agent(SingleDQNAgent, **dqn_agent_args, log_name="Main Agent - SingleDQN")
+            log_name="Main Agent - SingleDQN"
+            agent = load_or_create_dqn_agent(SingleDQNAgent, **dqn_agent_args, log_name=log_name)
         case "multi.random.base_manager":
-            agent = load_or_create_random_agent(BaseManagerRandomAgent, **common_args, log_name="Main Agent - Random BaseManager")
+            log_name="Main Agent - Random BaseManager"
+            agent = load_or_create_random_agent(BaseManagerRandomAgent, **common_args, log_name=log_name)
         case "multi.random.army_recruit_manager":
-            agent = load_or_create_random_agent(ArmyRecruitManagerRandomAgent, **common_args, log_name="Main Agent - Random ArmyRecruitManager")
+            log_name="Main Agent - Random ArmyRecruitManager"
+            agent = load_or_create_random_agent(ArmyRecruitManagerRandomAgent, **common_args, log_name=log_name)
         case "multi.random.army_attack_manager":
-            agent = load_or_create_random_agent(ArmyAttackManagerRandomAgent, **common_args, log_name="Main Agent - Random ArmyAttackManager")
+            log_name="Main Agent - Random ArmyAttackManager"
+            agent = load_or_create_random_agent(ArmyAttackManagerRandomAgent, **common_args, log_name=log_name)
         case "multi.random.game_manager":
             bm_path = checkpoint_path / "base_manager"
             arm_path = checkpoint_path / "army_recruit_manager"
@@ -316,13 +326,17 @@ def main(unused_argv):
                 army_recruit_manager=army_recruit_manager,
                 army_attack_manager=army_attack_manager
             )
-            agent = load_or_create_random_agent(GameManagerRandomAgent, **common_args, log_name="Main Agent - Random GameManager", **extra_agent_args)
+            log_name="Main Agent - Random GameManager"
+            agent = load_or_create_random_agent(GameManagerRandomAgent, **common_args, log_name=log_name, **extra_agent_args)
         case "multi.dqn.base_manager":
-            agent = load_or_create_dqn_agent(BaseManagerDQNAgent, **dqn_agent_args, log_name="Main Agent - Base Manager")
+            log_name="Main Agent - Base Manager"
+            agent = load_or_create_dqn_agent(BaseManagerDQNAgent, **dqn_agent_args, log_name=log_name)
         case "multi.dqn.army_recruit_manager":
-            agent = load_or_create_dqn_agent(ArmyRecruitManagerDQNAgent, **dqn_agent_args, log_name="Main Agent - Army Manager")
+            log_name="Main Agent - Army Manager"
+            agent = load_or_create_dqn_agent(ArmyRecruitManagerDQNAgent, **dqn_agent_args, log_name=log_name)
         case "multi.dqn.army_attack_manager":
-            agent = load_or_create_dqn_agent(ArmyAttackManagerDQNAgent, **dqn_agent_args, log_name="Main Agent - Attack Manager")
+            log_name="Main Agent - Attack Manager"
+            agent = load_or_create_dqn_agent(ArmyAttackManagerDQNAgent, **dqn_agent_args, log_name=log_name)
         case "multi.dqn.game_manager" if not FLAGS.use_random_subagents:
             bm_path = checkpoint_path / "base_manager"
             bm_agent_file = bm_path / "agent.pkl"
@@ -345,7 +359,8 @@ def main(unused_argv):
                 army_attack_manager=army_attack_manager
             )
 
-            agent = load_or_create_dqn_agent(GameManagerDQNAgent, **dqn_agent_args, log_name="Main Agent - Game Manager", **extra_agent_args)
+            log_name="Main Agent - Game Manager"
+            agent = load_or_create_dqn_agent(GameManagerDQNAgent, **dqn_agent_args, log_name=log_name, **extra_agent_args)
         case "multi.dqn.game_manager" if FLAGS.use_random_subagents:
             bm_path = checkpoint_path / "base_manager"
             arm_path = checkpoint_path / "army_recruit_manager"
@@ -362,9 +377,13 @@ def main(unused_argv):
                 army_attack_manager=army_attack_manager
             )
 
-            agent = load_or_create_dqn_agent(GameManagerDQNAgent, **dqn_agent_args, log_name="Main Agent - Game Manager", **extra_agent_args)
+            log_name = "Main Agent - Game Manager"
+            agent = load_or_create_dqn_agent(GameManagerDQNAgent, **dqn_agent_args, log_name=log_name, **extra_agent_args)
+            logger.info(f"Using agent {log_name} with parameters: {dqn_agent_args}")
         case _:
             raise RuntimeError(f"Unknown agent key {FLAGS.agent_key}")
+    logger.info(f"Using agent {log_name}")
+
     try:
         if FLAGS.export_stats_only:
             agent.save_stats(save_path)
@@ -535,7 +554,8 @@ if __name__ == "__main__":
     flags.DEFINE_string("agent2_path", help="Path to the enemy agent, if you want to use a SingleDQNAgent instead of a random agent as the enemy", required=False, default=None)
     flags.DEFINE_string("buffer_file", help="Path to a buffer to use instead of an empty buffer. Useful to skip burn-ins", required=False, default=None)
     flags.DEFINE_integer("save_frequency_episodes", default=1, help="We save the agent every X episodes.", lower_bound=1, required=False)
-    flags.DEFINE_boolean("exploit", default=False, required=False, help="Use the agent in explotation mode, not for training.")
+    flags.DEFINE_boolean("action_masking", default=False, required=False, help="Apply masking of invalid actions.")
+    flags.DEFINE_boolean("exploit", default=False, required=False, help="Use the agent in exploitation mode, not for training.")
     flags.DEFINE_boolean("use_scripted_enemy", default=False, required=False, help="Use a scripted enemy instead of a random one.")
     flags.DEFINE_boolean("use_random_subagents", default=False, required=False, help="Use random sub-agents for the feudal agent.")
     flags.DEFINE_boolean("reset_epsilon", default=False, required=False, help="Reset epsilon to its default when loading an agent.")

@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 import numpy as np
 
 Sample = List[Any]
-Buffer = namedtuple('Buffer', field_names=['state', 'action', 'action_args', 'reward', 'adjusted_reward', 'score', 'done', 'next_state'])
+Buffer = namedtuple('Buffer', field_names=['state', 'action', 'action_args', 'reward', 'adjusted_reward', 'score', 'done', 'next_state', 'next_state_available_actions'])
 
 
 class ExperienceReplayBuffer:
@@ -23,6 +23,7 @@ class ExperienceReplayBuffer:
         - reward: Reward obtained
         - done: Whether the action ended the episode
         - next_state: State of the environment after taking the action
+        - next_state_available_actions: Available actions for the next state
 
         Args:
             batch_size (int, optional): Number of samples to take. Defaults to 32.
@@ -37,7 +38,7 @@ class ExperienceReplayBuffer:
 
         return batch
 
-    def append(self, state: Any, action: Any, action_args: Dict[str, Any], reward: float, adjusted_reward: float, score: float, done: bool, next_state: Any):
+    def append(self, state: Any, action: Any, action_args: Dict[str, Any], reward: float, adjusted_reward: float, score: float, done: bool, next_state: Any, next_state_available_actions: Any):
         """Add a new sample to the replay memory.
 
         Args:
@@ -47,9 +48,10 @@ class ExperienceReplayBuffer:
             reward (float): Reward obtained
             done (bool): Whether the episode ended
             next_state (Any): New state of the environment after taking the action
+            next_state_available_actions (Any): Available actions for the next state
         """
         self._replay_memory.append(
-            self._buffer(state, action, action_args, reward, adjusted_reward, score, done, next_state))
+            self._buffer(state, action, action_args, reward, adjusted_reward, score, done, next_state, next_state_available_actions))
 
     @property
     def burn_in_capacity(self) -> float:

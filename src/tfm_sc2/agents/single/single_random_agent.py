@@ -35,9 +35,10 @@ class SingleRandomAgent(BaseAgent):
         return self.__agent_actions
 
     def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any]]:
-        # Swap these two lines to enable / disable invalid action masking
-        # available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"]]
-        available_actions = [a for a in self.available_actions(obs)]
+        if self._action_masking:
+            available_actions = self.available_actions(obs)
+        else:
+            available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"]]
 
         action = random.choice(available_actions)
         action_args, is_valid_action = self._get_action_args(obs=obs, action=action)

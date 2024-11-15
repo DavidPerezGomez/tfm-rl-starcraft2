@@ -152,8 +152,11 @@ class DQNAgent(BaseAgent):
         return super().is_training and (not self._random_mode) and (not self._is_burnin)
 
 
-    def select_action(self, obs: TimeStep, available_actions = None) -> Tuple[AllActions, Dict[str, Any]]:
-        available_actions = available_actions or [a for a in self.agent_actions if a in self._map_config["available_actions"]]
+    def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any], bool]:
+        if self._action_masking:
+            available_actions = self.available_actions(obs)
+        else:
+            available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"]]
 
         # One-hot encoded version of available actions
         valid_actions = self._actions_to_network(available_actions)
@@ -178,10 +181,6 @@ class DQNAgent(BaseAgent):
             if not self._status_flags["exploit_started"]:
                 self.logger.info(f"Starting exploit")
                 self._status_flags["exploit_started"] = True
-
-            # Final test, enable invalid action masking during exploitation
-            available_actions = [a for a in self.available_actions(obs) if a != AllActions.NO_OP]
-            valid_actions = self._actions_to_network(available_actions)
             raw_action = self.main_network.get_greedy_action(self._current_state_tensor, valid_actions=valid_actions)
 
         # Convert the "raw" action to a the right type of action
@@ -254,7 +253,7 @@ class DQNAgent(BaseAgent):
         """
 
         # Convert elements from the replay buffer to tensors
-        states, actions, action_args, rewards, adjusted_rewards, scores, dones, next_states = [i for i in batch]
+        states, actions, action_args, rewards, adjusted_rewards, scores, dones, next_states, next_state_available_actions = [i for i in batch]
         states = torch.stack(states).to(device=self.device)
         next_states = torch.stack(next_states).to(device=self.device)
         match self._reward_method:
@@ -274,7 +273,14 @@ class DQNAgent(BaseAgent):
         # Get q-values from the main network
         qvals = torch.gather(self.main_network.get_qvals(states), 1, actions_vals)
         # Get q-values from the target network
-        qvals_next = torch.max(self.target_network.get_qvals(next_states), dim=-1)[0].detach()
+        if self._action_masking:
+            # Select max q-value from available actions for each experience
+            nsaa_mask = torch.BoolTensor(next_state_available_actions).to(device=self.device)
+            masked_qvals = torch.where(nsaa_mask, self.target_network.get_qvals(next_states), -torch.inf)
+            qvals_next = torch.max(masked_qvals, dim=-1)[0].detach()
+        else:
+            # Select max q-value for each experience
+            qvals_next = torch.max(self.target_network.get_qvals(next_states), dim=-1)[0].detach()
         # Set terminal states to 0
         qvals_next[dones_t] = 0
 

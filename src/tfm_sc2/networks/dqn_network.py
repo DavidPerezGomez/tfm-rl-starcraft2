@@ -64,27 +64,28 @@ class DQNNetwork(nn.Module, ABC):
 
         return model_layers
 
-    def get_random_action(self, valid_actions: torch.Tensor = None) -> int:
+    def get_random_action(self, valid_actions: List = None) -> int:
         """Select a random action.
 
         Returns:
             int: Selected action
         """
         if valid_actions is not None:
-            return np.random.choice(np.where(valid_actions.cpu().numpy() == 1)[0])
+            return np.random.choice(np.where(valid_actions == 1)[0])
 
         return np.random.choice(self.actions)
 
-    def get_greedy_action(self, state: Union[np.ndarray, list, tuple], valid_actions: torch.Tensor = None):
+    def get_greedy_action(self, state: Union[np.ndarray, list, tuple], valid_actions: List = None):
         qvals = self.get_qvals(state)
         if valid_actions is not None:
-            qvals *= valid_actions
+            invalid_indices = np.where(valid_actions == 0)[0]
+            qvals[invalid_indices] = -torch.inf
         # Action selected = index of the highest Q-value
         action = torch.max(qvals, dim=-1)[1].item()
 
         return action
 
-    def get_action(self, state: Union[np.ndarray, list, tuple], epsilon: float = 0.05, valid_actions: torch.Tensor = None) -> int:
+    def get_action(self, state: Union[np.ndarray, list, tuple], epsilon: float = 0.05, valid_actions: List = None) -> int:
         """Select an action using epsilon-greedy method.
 
         Args:

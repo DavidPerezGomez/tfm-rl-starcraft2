@@ -50,7 +50,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
     def __init__(self,
                  map_name: str, map_config: Dict, buffer: ExperienceReplayBuffer = None,
-                 train: bool = True, checkpoint_path: Union[str|Path] = None, tracker_update_freq_seconds: int = 10,
+                 train: bool = True, action_masking: bool = False, checkpoint_path: Union[str|Path] = None, tracker_update_freq_seconds: int = 10,
                  reward_method: RewardMethod = RewardMethod.REWARD, **kwargs):
         super().__init__(**kwargs)
 
@@ -74,6 +74,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._attempted_barrack_positions = None
         self._train = train
         self._exploit = not train
+        self._action_masking = action_masking
         self._tracker: BaseEmissionsTracker = None
         self._tracker_update_freq_seconds = tracker_update_freq_seconds
         self._tracker_last_update = time.time()
@@ -277,6 +278,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def _load_agent_attrs(self, agent_attrs: Dict):
         self._train = agent_attrs["train"]
         self._exploit = agent_attrs.get("exploit", not self._train)
+        self._action_masking = agent_attrs["action_masking"]
         self.checkpoint_path = agent_attrs["checkpoint_path"]
         self._agent_stats = agent_attrs["agent_stats"]
         self._episode_stats = agent_attrs["episode_stats"]
@@ -297,6 +299,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return dict(
             train=self._train,
             exploit=self._exploit,
+            action_masking=self._action_masking,
             checkpoint_path=self.checkpoint_path,
             buffer=self._buffer,
             agent_path=self._agent_path,
@@ -324,6 +327,13 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         """Set the agent in training mode."""
         self._train = False
         self._exploit = True
+
+    @property
+    def action_masking(self) -> bool:
+        return self._action_masking
+
+    def set_action_masking(self, action_masking: bool):
+        self._action_masking = action_masking
 
     def _current_agent_stage(self):
         if self._exploit:
@@ -630,8 +640,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         if not (obs.last() or obs.first()):
             if self._prev_action_is_valid == False:
                 adjusted_reward = Constants.INVALID_ACTION_REWARD
-            elif self._prev_action == AllActions.NO_OP:
-                adjusted_reward = Constants.NO_OP_REWARD
+            # elif self._prev_action == AllActions.NO_OP:
+            #     adjusted_reward = Constants.NO_OP_REWARD
 
         self._current_score = score
         self._current_reward = reward
@@ -693,14 +703,14 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         )
         return torch.Tensor(state_tuple).to(device=self.device), state_tuple
 
-    def _actions_to_network(self, actions: List[AllActions], as_tensor: bool = True) -> List[np.int8]:
+    def _actions_to_network(self, actions: List[AllActions], as_tensor: bool = False) -> List|torch.Tensor:
         """Converts a list of AllAction elements to a one-hot encoded version that the network can use.
 
         Args:
             actions (List[AllActions]): List of actions
 
         Returns:
-            List[bool]: One-hot encoded version of the actions provided.
+            Tensor: One-hot encoded version of the actions provided.
         """
         ohe_actions = np.zeros(self._num_actions, dtype=np.int8)
 
@@ -727,8 +737,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self.setup_actions()
         elif not self._exploit:
             done = obs.last()
+            available_actions = self.available_actions(obs)
+            ohe_available_actions = self._actions_to_network(available_actions)
             if self._buffer is not None:
-                self._buffer.append(self._prev_state_tensor, self._prev_action, self._prev_action_args, self._current_reward, self._current_adjusted_reward, self._current_score, done, self._current_state_tensor)
+                self._buffer.append(self._prev_state_tensor, self._prev_action, self._prev_action_args, self._current_reward, self._current_adjusted_reward, self._current_score, done, self._current_state_tensor, ohe_available_actions)
 
     def post_step(self, obs: TimeStep, action: AllActions, action_args: Dict[str, Any], original_action: AllActions, original_action_args: Dict[str, Any], is_valid_action: bool):
         self._prev_score = obs.observation.score_cumulative.score
@@ -796,6 +808,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             f"Mean Adjusted Rewards for stage ({episode_count} ep) {mean_adjusted_rewards:.2f} / (10ep) {mean_adjusted_rewards_10:.2f}",
             f"Mean Scores ({episode_count} ep) {mean_scores:.2f} / (10ep) {mean_scores_10:.2f}",
             f"Episode steps: {self._current_episode_stats.steps} / Total steps: {self.current_agent_stats.step_count_per_stage[episode_stage]}",
+            f"Invalid action masking: {self._action_masking})",
             f"Invalid actions: {num_invalid}/{num_valid + num_invalid} ({100 * pct_invalid:.2f}%)",
             f"Max reward {self.current_aggregated_episode_stats.max_reward_per_stage[episode_stage]:.2f} (absolute max: {self.current_aggregated_episode_stats.max_reward})",
             f"Max adjusted reward {self.current_aggregated_episode_stats.max_adjusted_reward_per_stage[episode_stage]:.2f} (absolute max: {self.current_aggregated_episode_stats.max_adjusted_reward})",
@@ -846,9 +859,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return game_action()
 
     def available_actions(self, obs: TimeStep) -> List[AllActions]:
-        available_actions = [a for a in self.agent_actions if self.can_take(obs, a)]
-        if len(available_actions) > 1 and AllActions.NO_OP in available_actions:
-            available_actions = [a for a in available_actions if a != AllActions.NO_OP]
+        available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"] and self.can_take(obs, a)]
+        # if len(available_actions) > 1 and AllActions.NO_OP in available_actions:
+        #     available_actions = [a for a in available_actions if a != AllActions.NO_OP]
 
         return available_actions
 
