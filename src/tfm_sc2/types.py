@@ -96,7 +96,7 @@ State = namedtuple('State',
                                 # Buildings
                                 "num_supply_depots", "num_completed_supply_depots", "num_barracks", "num_completed_barracks",
                                 # Army
-                                "num_marines", "num_marines_in_queue", "total_army_health",
+                                "num_marines", "num_idle_marines", "pct_idle_marines", "num_marines_in_queue", "total_army_health",
                                 # Resources
                                 "free_supply", "minerals", "collection_rate_minerals",
                                 # Scores

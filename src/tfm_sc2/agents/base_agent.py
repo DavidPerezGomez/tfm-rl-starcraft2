@@ -1347,7 +1347,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         # TODO more stats on N workers (e.g. distance to command centers, distance to minerals, to geysers...)
         return dict(
             num_workers=num_workers,
-			num_idle_workers=len([w for w in workers if self.is_idle(w)]),
+			num_idle_workers=num_idle_workers,
             pct_idle_workers=pct_idle_workers,
             num_mineral_harvesters=num_mineral_harvesters,
             pct_mineral_harvesters=pct_mineral_harvesters,
@@ -1358,10 +1358,14 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
         num_marines_in_queue = sum(map(lambda b: b.order_length, barracks))
         num_marines = len(marines)
+        num_idle_workers = len([m for m in marines if self.is_idle(m)])
+        pct_idle_workers = 0 if num_marines == 0 else num_idle_workers / num_marines
         total_army_health = sum(map(lambda b: b.health, marines))
 
         return dict(
             num_marines=num_marines,
+			num_idle_marines=num_idle_workers,
+            pct_idle_marines=pct_idle_workers,
             num_marines_in_queue=num_marines_in_queue,
             total_army_health=total_army_health,
         )
