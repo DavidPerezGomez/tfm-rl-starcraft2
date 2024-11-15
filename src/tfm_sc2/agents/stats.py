@@ -81,7 +81,6 @@ class AgentStats:
         stage = episode_stats.initial_stage
 
         self.step_count_per_stage[stage] += episode_stats.steps
-        self.episode_count_per_stage[stage] += 1
         self.total_emissions_per_stage[stage] += episode_stats.emissions
         self.total_reward_per_stage[stage] += episode_stats.reward
         self.total_adjusted_reward_per_stage[stage] += episode_stats.adjusted_reward
