@@ -180,7 +180,19 @@ def load_or_create_random_agent(cls, map_name, map_config, load_agent: bool, che
 
 def main(unused_argv):
     FLAGS = flags.FLAGS
-    setup_logging(FLAGS.log_file)
+    model_id = FLAGS.model_id or FLAGS.agent_key
+    checkpoint_path = Path(FLAGS.models_path) / model_id
+    checkpoint_path.mkdir(exist_ok=True, parents=True)
+
+    save_agent = FLAGS.save_agent
+    exploit = FLAGS.exploit
+    save_path = checkpoint_path
+    if exploit:
+        save_path = checkpoint_path / "exploit"
+        save_path.mkdir(exist_ok=True, parents=True)
+
+    log_file = save_path / FLAGS.log_file
+    setup_logging(log_file)
     logger = MainLogger.get()
     logger.info(f"Running with flags {FLAGS.flags_into_string()}")
     SC2_CONFIG["visualize"] = FLAGS.visualize
@@ -189,19 +201,16 @@ def main(unused_argv):
     if map_name not in MAP_CONFIGS:
         raise RuntimeError(f"No config for map {map_name}")
     map_config = MAP_CONFIGS[map_name]
-    model_id = FLAGS.model_id or FLAGS.agent_key
-    checkpoint_path = Path(FLAGS.models_path) / model_id
-    checkpoint_path.mkdir(exist_ok=True, parents=True)
     emissions_filename = "emissions.csv"
-    emissions_file = checkpoint_path / emissions_filename
+    emissions_file = save_path / emissions_filename
     emissions_idx = 0
     while emissions_file.exists():
         emissions_idx += 1
         if emissions_idx >= 100:
-            raise RuntimeError(f"There are already 100 emission files under {checkpoint_path}, please clean them up or move them to continue")
+            raise RuntimeError(f"There are already 100 emission files under {save_path}, please clean them up or move them to continue")
         emissions_filename = f"emissions_{emissions_idx:02d}.csv"
-        emissions_file = checkpoint_path / emissions_filename
-    save_path = checkpoint_path
+        emissions_file = save_path / emissions_filename
+
     # checkpoint_path: Path = None
     agent_file = checkpoint_path / "agent.pkl"
     load_agent = agent_file.exists()
@@ -210,13 +219,9 @@ def main(unused_argv):
         logger.info(f"Agent will be loaded from file: {agent_file}")
     else:
         logger.info(f"A new agent will be created")
-    save_agent = True
-    exploit = FLAGS.exploit
+
     action_masking = FLAGS.action_masking
     # We will still save the stats when exploiting, but in a subfolder
-    if exploit:
-        save_path = checkpoint_path / "exploit"
-        save_path.mkdir(exist_ok=True, parents=True)
 
     reward_method_str = FLAGS.reward_method
 
@@ -280,13 +285,18 @@ def main(unused_argv):
         enemy_agent = load_or_create_dqn_agent(SingleDQNAgent, exploit=exploit, checkpoint_path=FLAGS.agent2_path, load_agent=True, map_name=map_name, map_config=map_config, reward_method=reward_method, log_name="Enemy Agent - SingleDQN", load_networks_only=False, action_masking=action_masking)
         other_agents.append(enemy_agent)
 
-    if buffer_file is None:
+    if not buffer_file is None:
+        buffer_path = checkpoint_path / FLAGS.buffer_file
+        if buffer_path.exists():
+            logger.info(f"Using buffer from file {buffer_path}")
+            with open(buffer_path, mode="rb") as f:
+                buffer = pickle.load(f)
+        else:
+            logger.info(f"Buffer file {buffer_path} not found. Creating new buffer with memory size = {memory_size} and burn-in = {burn_in}")
+            buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
+    else:
         logger.info(f"Creating new buffer with memory size = {memory_size} and burn-in = {burn_in}")
         buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-    else:
-        logger.info(f"Using buffer from file {buffer_file}")
-        with open(buffer_file, mode="rb") as f:
-            buffer = pickle.load(f)
 
     base_args = dict(map_name=map_name, map_config=map_config, reward_method=reward_method)
     common_args = dict(buffer=buffer, load_agent=load_agent, action_masking=action_masking,  **base_args)
@@ -385,12 +395,9 @@ def main(unused_argv):
     logger.info(f"Using agent {log_name}")
 
     try:
-        if FLAGS.export_stats_only:
-            agent.save_stats(save_path)
-            return
         finished_episodes = 0
         # We set measure_power_secs to a very high value because we want to flush emissions as we want
-        tracker = OfflineEmissionsTracker(country_iso_code="ESP", experiment_id=f"global_{FLAGS.model_id}_{map_name}", measure_power_secs=3600, log_level=logging.WARNING, output_dir=str(checkpoint_path), output_file=emissions_filename)
+        tracker = OfflineEmissionsTracker(country_iso_code="ESP", experiment_id=f"global_{FLAGS.model_id}_{map_name}", measure_power_secs=3600, log_level=logging.WARNING, output_dir=str(save_path), output_file=emissions_filename)
         agent.set_tracker(tracker)
         max_episode_failures = 5
         current_episode_failures = 0
@@ -490,7 +497,10 @@ def main(unused_argv):
 
                         if save_agent and (finished_episodes % FLAGS.save_frequency_episodes) == 0:
                             logger.info(f"Saving agent after {finished_episodes} episodes")
-                            agent.save(save_path)
+                            if FLAGS.export_stats_only:
+                                agent.save_stats(save_path)
+                            else:
+                                agent.save(save_path)
                             already_saved = True
                 break
 
@@ -504,7 +514,10 @@ def main(unused_argv):
         if save_agent and not already_saved:
             logger.info(f"Saving final agent after {finished_episodes} episodes")
             total_emissions = tracker.stop()
-            agent.save(save_path)
+            if FLAGS.export_stats_only:
+                agent.save_stats(save_path)
+            else:
+                agent.save(save_path)
         else:
             total_emissions = tracker.stop()
             logger.info(f"Total emissions after {finished_episodes} episodes for agent {agent._log_name} (and {len(other_agents)} other agents): {total_emissions:.2f}")
