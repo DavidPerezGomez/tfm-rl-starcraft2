@@ -51,7 +51,6 @@ class DQNAgent(BaseAgent):
         self.epsilon = hyperparams.epsilon
         self.loss = self.hyperparams.loss or torch.nn.HuberLoss()
         self._random_mode = random_mode
-        self._is_burnin = self._buffer.burn_in_capacity < 1
 
         # Placeholders
         self._action_to_idx = None
@@ -76,7 +75,7 @@ class DQNAgent(BaseAgent):
 
     @property
     def _collect_stats(self) -> bool:
-        return not (self._is_burnin or self._random_mode)
+        return not (self.is_burnin or self._random_mode)
 
     def _update_checkpoint_paths(self):
         super()._update_checkpoint_paths()
@@ -126,7 +125,7 @@ class DQNAgent(BaseAgent):
         torch.save(self.target_network, self._target_network_path)
 
     def _current_agent_stage(self):
-        if self._is_burnin:
+        if self.is_burnin:
             return AgentStage.BURN_IN
         if self._exploit:
             return AgentStage.EXPLOIT
@@ -144,12 +143,15 @@ class DQNAgent(BaseAgent):
         # Last observation
         self.__prev_reward = None
 
-        self._is_burnin = self._buffer.burn_in_capacity < 1
-        self._current_episode_stats.is_burnin = self._is_burnin
+        self._current_episode_stats.is_burnin = self.is_burnin
 
     @property
     def is_training(self):
-        return super().is_training and (not self._random_mode) and (not self._is_burnin)
+        return super().is_training and (not self._random_mode) and (not self.is_burnin)
+
+    @property
+    def is_burnin(self):
+        return super().is_training and self._buffer.burn_in_capacity < 1
 
 
     def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any], bool]:
@@ -162,7 +164,7 @@ class DQNAgent(BaseAgent):
         valid_actions = self._actions_to_network(available_actions)
         if not any(valid_actions):
             valid_actions = None
-        if (not self._exploit) and (self._is_burnin or self._random_mode):
+        if (not self._exploit) and (self.is_burnin or self._random_mode):
             if self._random_mode:
                 self.logger.debug(f"Random mode - collecting experience from random actions")
             elif not self._status_flags["burnin_started"]:
@@ -196,18 +198,18 @@ class DQNAgent(BaseAgent):
             # do updates
             done = obs.last()
 
-            if (not self._is_burnin) and self.is_training:
+            if (not self.is_burnin) and self.is_training:
                 main_net_updated = False
                 target_net_updated = False
-                if self.hyperparams.main_network_update_frequency > -1:
-                    if (self._current_episode_stats.steps % self.hyperparams.main_network_update_frequency) == 0:
+                if self.hyperparams.main_network_update_frequency > 0:
+                    if (self.current_agent_stats.step_count % self.hyperparams.main_network_update_frequency) == 0:
                         if not self._status_flags["main_net_updated"]:
                             self.logger.info(f"First main network update")
                             self._status_flags["main_net_updated"] = True
                         self._current_episode_stats.losses = self.update_main_network(self._current_episode_stats.losses)
                         main_net_updated = True
                 if self.hyperparams.target_network_sync_frequency > 0:
-                    if (self._current_episode_stats.steps % self.hyperparams.target_network_sync_frequency) == 0:
+                    if (self.current_agent_stats.step_count % self.hyperparams.target_network_sync_frequency) == 0:
                         if not self._status_flags["target_net_updated"]:
                             self.logger.info(f"First target network update")
                             self._status_flags["target_net_updated"] = True
@@ -225,7 +227,7 @@ class DQNAgent(BaseAgent):
                     self._current_episode_stats.epsilon = self.epsilon if not self._random_mode else 1.
                     self._current_episode_stats.loss = np.mean(self._current_episode_stats.losses)
                     self.epsilon = max(self.epsilon * self.hyperparams.epsilon_decay, self.hyperparams.min_epsilon)
-            elif done and self._is_burnin:
+            elif done and self.is_burnin:
                 self._current_episode_stats.epsilon = 1.
             elif done and self._exploit:
                 self._current_episode_stats.epsilon = 0.
