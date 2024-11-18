@@ -725,13 +725,13 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def pre_step(self, obs: TimeStep):
         self._current_state_tensor, self._current_state_tuple = self._convert_obs_to_state(obs)
 
-        if not self._exploit:
-            reward, adjusted_reward, score = self.get_reward_and_score(obs)
-            self._current_episode_stats.reward += reward
-            self._current_episode_stats.adjusted_reward += adjusted_reward
-            self._current_episode_stats.score += score
-            self._current_episode_stats.steps += 1
-            self.current_agent_stats.step_count += 1
+        # if not self._exploit:
+        reward, adjusted_reward, score = self.get_reward_and_score(obs)
+        self._current_episode_stats.reward += reward
+        self._current_episode_stats.adjusted_reward += adjusted_reward
+        self._current_episode_stats.score += score
+        self._current_episode_stats.steps += 1
+        self.current_agent_stats.step_count += 1
 
         if obs.first():
             self.setup_actions()
@@ -749,43 +749,43 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_action = self._action_to_idx[original_action]
         self._prev_action_args = original_action_args
 
-        if not self._exploit:
-            if obs.last():
-                emissions = self._tracker.flush() if self._tracker is not None else 0.
-                self.logger.debug(f"End of episode - Got extra {emissions} since last update")
+        # if not self._exploit:
+        if obs.last():
+            emissions = self._tracker.flush() if self._tracker is not None else 0.
+            self.logger.debug(f"End of episode - Got extra {emissions} since last update")
+            self._current_episode_stats.emissions += emissions
+            self._current_episode_stats.is_training = self.is_training
+            self._current_episode_stats.is_exploit = self._exploit
+            self._current_episode_stats.final_stage = self._current_agent_stage().name
+            self._tracker_last_update = time.time()
+            episode_stage = self._current_episode_stats.initial_stage
+            mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_method=self._reward_method)
+            max_mean_rewards = self._best_mean_rewards
+            max_mean_rewards_str = f"{max_mean_rewards:.2f}" if max_mean_rewards is not None else "None"
+            new_max_mean_rewards = (max_mean_rewards is None) or (mean_rewards >= max_mean_rewards)
+
+            if (self.is_training) and (self.checkpoint_path is not None) and new_max_mean_rewards:
+                self.logger.info(f"New max reward during training ({max_mean_rewards_str} -> {mean_rewards:.2f}). Saving best agent...")
+                checkpoint_path = self.checkpoint_path
+                save_path = self.checkpoint_path / "best_agent"
+                save_path.mkdir(exist_ok=True, parents=True)
+                self.save(checkpoint_path=save_path)
+                self.checkpoint_path = checkpoint_path
+                self._best_mean_rewards = mean_rewards
+
+            self.current_agent_stats.process_episode(self._current_episode_stats)
+            self.current_aggregated_episode_stats.process_episode(self._current_episode_stats)
+            self._episode_stats[self._map_name].append(self._current_episode_stats)
+            log_msg_parts = ["\n=================", "================="] + self._get_end_of_episode_info_components() + ["=================", "================="]
+            log_msg = "\n".join(log_msg_parts)
+            self.logger.info(log_msg)
+        else:
+            now = time.time()
+            if (self._tracker is not None) and (now - self._tracker_last_update > self._tracker_update_freq_seconds):
+                emissions = self._tracker.flush() or 0.
+                self.logger.debug(f"Tracker flush - Got extra {emissions} since last update")
                 self._current_episode_stats.emissions += emissions
-                self._current_episode_stats.is_training = self.is_training
-                self._current_episode_stats.is_exploit = self._exploit
-                self._current_episode_stats.final_stage = self._current_agent_stage().name
-                self._tracker_last_update = time.time()
-                episode_stage = self._current_episode_stats.initial_stage
-                mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_method=self._reward_method)
-                max_mean_rewards = self._best_mean_rewards
-                max_mean_rewards_str = f"{max_mean_rewards:.2f}" if max_mean_rewards is not None else "None"
-                new_max_mean_rewards = (max_mean_rewards is None) or (mean_rewards >= max_mean_rewards)
-
-                if (self.is_training) and (self.checkpoint_path is not None) and new_max_mean_rewards:
-                    self.logger.info(f"New max reward during training ({max_mean_rewards_str} -> {mean_rewards:.2f}). Saving best agent...")
-                    checkpoint_path = self.checkpoint_path
-                    save_path = self.checkpoint_path / "best_agent"
-                    save_path.mkdir(exist_ok=True, parents=True)
-                    self.save(checkpoint_path=save_path)
-                    self.checkpoint_path = checkpoint_path
-                    self._best_mean_rewards = mean_rewards
-
-                self.current_agent_stats.process_episode(self._current_episode_stats)
-                self.current_aggregated_episode_stats.process_episode(self._current_episode_stats)
-                self._episode_stats[self._map_name].append(self._current_episode_stats)
-                log_msg_parts = ["\n=================", "================="] + self._get_end_of_episode_info_components() + ["=================", "================="]
-                log_msg = "\n".join(log_msg_parts)
-                self.logger.info(log_msg)
-            else:
-                now = time.time()
-                if (self._tracker is not None) and (now - self._tracker_last_update > self._tracker_update_freq_seconds):
-                    emissions = self._tracker.flush() or 0.
-                    self.logger.debug(f"Tracker flush - Got extra {emissions} since last update")
-                    self._current_episode_stats.emissions += emissions
-                    self._tracker_last_update = now
+                self._tracker_last_update = now
 
     def _get_end_of_episode_info_components(self) -> List[str]:
         num_invalid = sum(self._current_episode_stats.invalid_action_counts.values())
@@ -808,7 +808,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             f"Mean Adjusted Rewards for stage ({episode_count} ep) {mean_adjusted_rewards:.2f} / (10ep) {mean_adjusted_rewards_10:.2f}",
             f"Mean Scores ({episode_count} ep) {mean_scores:.2f} / (10ep) {mean_scores_10:.2f}",
             f"Episode steps: {self._current_episode_stats.steps} / Total steps: {self.current_agent_stats.step_count_per_stage[episode_stage]}",
-            f"Invalid action masking: {self._action_masking})",
+            f"Invalid action masking: {self._action_masking}",
             f"Invalid actions: {num_invalid}/{num_valid + num_invalid} ({100 * pct_invalid:.2f}%)",
             f"Max reward {self.current_aggregated_episode_stats.max_reward_per_stage[episode_stage]:.2f} (absolute max: {self.current_aggregated_episode_stats.max_reward})",
             f"Max adjusted reward {self.current_aggregated_episode_stats.max_adjusted_reward_per_stage[episode_stage]:.2f} (absolute max: {self.current_aggregated_episode_stats.max_adjusted_reward})",
