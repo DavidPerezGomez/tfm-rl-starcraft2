@@ -35,7 +35,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     _action_to_game = {
         AllActions.NO_OP: actions.RAW_FUNCTIONS.no_op,
         AllActions.HARVEST_MINERALS: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Harvest_Gather_unit("now", source_unit_tag, target_unit_tag),
-        AllActions.RECRUIT_SCV: lambda source_unit_tag: actions.RAW_FUNCTIONS.Train_SCV_quick("now", source_unit_tag),
+        AllActions.RECRUIT_SCV_0: lambda source_unit_tag: actions.RAW_FUNCTIONS.Train_SCV_quick("now", source_unit_tag),
+        AllActions.RECRUIT_SCV_1: lambda source_unit_tag: actions.RAW_FUNCTIONS.Train_SCV_quick("now", source_unit_tag),
+        AllActions.RECRUIT_SCV_2: lambda source_unit_tag: actions.RAW_FUNCTIONS.Train_SCV_quick("now", source_unit_tag),
         AllActions.BUILD_SUPPLY_DEPOT: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Build_SupplyDepot_pt("now", source_unit_tag, target_position),
         AllActions.BUILD_COMMAND_CENTER: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Build_CommandCenter_pt("now", source_unit_tag, target_position),
         AllActions.BUILD_BARRACKS: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Build_Barracks_pt("now", source_unit_tag, target_position),
@@ -146,12 +148,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return self._aggregated_episode_stats[self._map_name]
 
     @property
-    def checkpoint_path(self) -> Optional[Path]:
-        return self._checkpoint_path
-
-    @property
     def burn_in_capacity(self) -> float:
         return self._buffer.burn_in_capacity
+
+    @property
+    def checkpoint_path(self) -> Optional[Path]:
+        return self._checkpoint_path
 
     @checkpoint_path.setter
     def checkpoint_path(self, checkpoint_path: Union[str|Path]):
@@ -422,22 +424,34 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     action_args = None
                 case AllActions.HARVEST_MINERALS:
                     minerals = [unit for unit in obs.observation.raw_units if Minerals.contains(unit.unit_type)]
-                    command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
-                    idle_workers = self.get_idle_workers(obs)
                     assert (len(minerals) > 0), "There are no minerals to harvest"
+                    command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
                     assert (len(command_centers) > 0), "There are no command centers"
+                    idle_workers = self.get_idle_workers(obs)
                     assert (len(idle_workers) > 0), "There are no idle workers"
 
                     worker = random.choice(idle_workers)
                     command_center, _ = self.get_closest(command_centers, Position(worker.x, worker.y))
                     mineral, _ = self.get_closest(minerals, Position(command_center.x, command_center.y))
                     action_args = dict(source_unit_tag=worker.tag, target_unit_tag=mineral.tag)
-                case AllActions.RECRUIT_SCV:
+                case AllActions.RECRUIT_SCV_0:
                     command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
-                    command_centers = [cc for cc in command_centers if cc.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH]
-                    assert len(command_centers) > 0, "There are no available command centers"
-                    command_centers = sorted(command_centers, key=lambda cc: cc.order_length)
-                    action_args = dict(source_unit_tag=random.choice(command_centers).tag)
+                    assert len(command_centers) > 0, "There are no command centers"
+                    command_center = command_centers[0]
+                    assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command centers queue is full"
+                    action_args = dict(source_unit_tag=command_center.tag)
+                case AllActions.RECRUIT_SCV_1:
+                    command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
+                    assert len(command_centers) > 1, "There is no second command center"
+                    command_center = command_centers[1]
+                    assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command centers queue is full"
+                    action_args = dict(source_unit_tag=command_center.tag)
+                case AllActions.RECRUIT_SCV_2:
+                    command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
+                    assert len(command_centers) > 2, "There is no third command center"
+                    command_center = command_centers[2]
+                    assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command centers queue is full"
+                    action_args = dict(source_unit_tag=command_center.tag)
                 case AllActions.BUILD_SUPPLY_DEPOT:
                     position = self.get_next_supply_depot_position(obs)
                     workers = self.get_idle_workers(obs)
@@ -953,25 +967,42 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 if self.has_idle_workers(obs):
                     return True
                 return False
-            case AllActions.RECRUIT_SCV, args if _has_source_unit_tag(args):
-                command_center_tag = args["source_unit_tag"]
-                command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, unit_tags=command_center_tag)
-                command_centers = [cc for cc in command_centers if cc.order_length <= Constants.COMMAND_CENTER_QUEUE_LENGTH]
-                if len(command_centers) == 0:
-                    return False
-                if command_centers[0].order_length > Constants.COMMAND_CENTER_QUEUE_LENGTH:
-                    return False
+            case AllActions.RECRUIT_SCV_0, _:
                 if not SC2Costs.SCV.can_pay(obs.observation.player):
                     return False
-                return True
-            case AllActions.RECRUIT_SCV, _:
+
                 command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
                 if len(command_centers) == 0:
                     return False
 
-                for command_center in command_centers:
-                    if self.can_take(obs, action, source_unit_tag=command_center.tag):
-                        return True
+                if command_centers[0].order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
+                    return False
+
+                return True
+            case AllActions.RECRUIT_SCV_1, _:
+                if not SC2Costs.SCV.can_pay(obs.observation.player):
+                    return False
+
+                command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
+                if len(command_centers) < 2:
+                    return False
+
+                if command_centers[1].order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
+                    return False
+
+                return True
+            case AllActions.RECRUIT_SCV_2, _:
+                if not SC2Costs.SCV.can_pay(obs.observation.player):
+                    return False
+
+                command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
+                if len(command_centers) < 3:
+                    return False
+
+                if command_centers[2].order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
+                    return False
+
+                return True
             case AllActions.BUILD_SUPPLY_DEPOT, _:
                 target_position = self.get_next_supply_depot_position(obs)
                 if target_position is None:
@@ -1418,7 +1449,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         available_actions = self.available_actions(obs)
         return dict(
             can_harvest_minerals=int(AllActions.HARVEST_MINERALS in available_actions),
-            can_recruit_worker=int(AllActions.RECRUIT_SCV in available_actions),
+            can_recruit_worker_0=int(AllActions.RECRUIT_SCV_0 in available_actions),
+            can_recruit_worker_1=int(AllActions.RECRUIT_SCV_1 in available_actions),
+            can_recruit_worker_2=int(AllActions.RECRUIT_SCV_2 in available_actions),
             can_build_supply_depot=int(AllActions.BUILD_SUPPLY_DEPOT in available_actions),
             can_build_command_center=int(AllActions.BUILD_COMMAND_CENTER in available_actions),
             can_build_barracks=int(AllActions.BUILD_BARRACKS in available_actions),

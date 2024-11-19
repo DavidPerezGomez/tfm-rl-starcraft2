@@ -10,9 +10,11 @@ class AllActions(IntEnum):
     # BUILD_REFINERY   = 13
 
     # Base Manager actions
-    RECRUIT_SCV          = 21
-    BUILD_SUPPLY_DEPOT   = 22
-    BUILD_COMMAND_CENTER = 24
+    RECRUIT_SCV_0        = 21
+    RECRUIT_SCV_1        = 22
+    RECRUIT_SCV_2        = 23
+    BUILD_SUPPLY_DEPOT   = 24
+    BUILD_COMMAND_CENTER = 25
 
     # ArmyRecruit Manager actions
     BUILD_BARRACKS = 31
@@ -47,14 +49,16 @@ class GameManagerActions(IntEnum):
 class BaseManagerActions(IntEnum):
     NO_OP                = AllActions.NO_OP
     HARVEST_MINERALS     = AllActions.HARVEST_MINERALS
-    RECRUIT_SCV          = AllActions.RECRUIT_SCV
+    RECRUIT_SCV_0          = AllActions.RECRUIT_SCV_0
+    RECRUIT_SCV_1          = AllActions.RECRUIT_SCV_1
+    RECRUIT_SCV_2          = AllActions.RECRUIT_SCV_2
     BUILD_SUPPLY_DEPOT   = AllActions.BUILD_SUPPLY_DEPOT
     BUILD_COMMAND_CENTER = AllActions.BUILD_COMMAND_CENTER
 
 class ArmyRecruitManagerActions(IntEnum):
     NO_OP          = AllActions.NO_OP
     HARVEST_MINERALS     = AllActions.HARVEST_MINERALS
-    RECRUIT_SCV          = AllActions.RECRUIT_SCV
+    RECRUIT_SCV_0        = AllActions.RECRUIT_SCV_0
     BUILD_SUPPLY_DEPOT   = AllActions.BUILD_SUPPLY_DEPOT
     RECRUIT_MARINE = AllActions.RECRUIT_MARINE
     # RECRUIT_DOCTOR = AllActions.RECRUIT_DOCTOR
