@@ -299,8 +299,8 @@ def main(unused_argv):
         buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
 
     base_args = dict(map_name=map_name, map_config=map_config, reward_method=reward_method)
-    common_args = dict(buffer=buffer, load_agent=load_agent, action_masking=action_masking,  **base_args)
-    dqn_agent_args = dict(exploit=exploit, load_networks_only=load_networks_only, checkpoint_path=checkpoint_path, **common_args)
+    common_args = dict(buffer=buffer, load_agent=load_agent, action_masking=action_masking, checkpoint_path=checkpoint_path, **base_args)
+    dqn_agent_args = dict(exploit=exploit, load_networks_only=load_networks_only, **common_args)
     subagent_args = dict(buffer=None, exploit=True, load_networks_only=False, **base_args)
     match FLAGS.agent_key:
         case "single.random":

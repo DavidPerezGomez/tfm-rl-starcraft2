@@ -58,15 +58,15 @@ class BaseManagerActions(IntEnum):
 class ArmyRecruitManagerActions(IntEnum):
     NO_OP          = AllActions.NO_OP
     HARVEST_MINERALS     = AllActions.HARVEST_MINERALS
-    RECRUIT_SCV_0        = AllActions.RECRUIT_SCV_0
+    # RECRUIT_SCV_0        = AllActions.RECRUIT_SCV_0
     BUILD_SUPPLY_DEPOT   = AllActions.BUILD_SUPPLY_DEPOT
+    BUILD_BARRACKS = AllActions.BUILD_BARRACKS
     RECRUIT_MARINE = AllActions.RECRUIT_MARINE
     # RECRUIT_DOCTOR = AllActions.RECRUIT_DOCTOR
     # BUILD_TECH_LAB = AllActions.BUILD_TECH_LAB
-    BUILD_BARRACKS = AllActions.BUILD_BARRACKS
 
 class ArmyAttackManagerActions(IntEnum):
-    NO_OP                     = AllActions.NO_OP
+    NO_OP                               = AllActions.NO_OP
     ATTACK_BUILDING_WITH_SINGLE_UNIT    = AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT
     ATTACK_WORKER_WITH_SINGLE_UNIT      = AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT
     ATTACK_ARMY_WITH_SINGLE_UNIT        = AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT

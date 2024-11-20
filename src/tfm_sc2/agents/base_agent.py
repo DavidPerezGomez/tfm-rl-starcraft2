@@ -17,7 +17,7 @@ from pysc2.env.environment import TimeStep
 from pysc2.lib import actions, features, units
 from pysc2.lib.features import PlayerRelative
 from pysc2.lib.named_array import NamedNumpyArray
-from typing_extensions import Self
+from typing_extensions import Self, deprecated
 
 from ..actions import AllActions
 from ..constants import Constants, SC2Costs
@@ -67,6 +67,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._map_config = map_config
         self._supply_depot_positions = None
         self._command_center_positions = None
+        self._command_center_0_pos = None
+        self._command_center_1_pos = None
+        self._command_center_2_pos = None
         self._barrack_positions = None
         self._used_supply_depot_positions = None
         self._used_command_center_positions = None
@@ -391,6 +394,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         self._supply_depot_positions = [Position(t[0], t[1]) for t in self._supply_depot_positions]
         self._command_center_positions = [Position(t[0], t[1]) for t in self._command_center_positions]
+        self._command_center_0_pos = self._command_center_positions[0] if len(self._command_center_positions) > 0 else None
+        self._command_center_1_pos = self._command_center_positions[1] if len(self._command_center_positions) > 1 else None
+        self._command_center_2_pos = self._command_center_positions[2] if len(self._command_center_positions) > 2 else None
         self._barrack_positions = [Position(t[0], t[1]) for t in self._barrack_positions]
         self._attempted_barrack_positions = []
         self._attempted_supply_depot_positions = []
@@ -428,22 +434,22 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     mineral, _ = self.get_closest(minerals, Position(command_center.x, command_center.y))
                     action_args = dict(source_unit_tag=worker.tag, target_unit_tag=mineral.tag)
                 case AllActions.RECRUIT_SCV_0:
-                    command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
-                    assert len(command_centers) > 0, "There are no command centers"
-                    command_center = command_centers[0]
-                    assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command centers queue is full"
+                    assert self._command_center_0_pos is not None, "There is no position for first command center in the map"
+                    command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_0_pos, first_only=True)
+                    assert command_center is not None, "There is no first command center"
+                    assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command center's queue is full"
                     action_args = dict(source_unit_tag=command_center.tag)
                 case AllActions.RECRUIT_SCV_1:
-                    command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
-                    assert len(command_centers) > 1, "There is no second command center"
-                    command_center = command_centers[1]
-                    assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command centers queue is full"
+                    assert self._command_center_1_pos is not None, "There is no position for second command center in the map"
+                    command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_1_pos, first_only=True)
+                    assert command_center is not None, "There is no second command center"
+                    assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command center's queue is full"
                     action_args = dict(source_unit_tag=command_center.tag)
                 case AllActions.RECRUIT_SCV_2:
-                    command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
-                    assert len(command_centers) > 2, "There is no third command center"
-                    command_center = command_centers[2]
-                    assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command centers queue is full"
+                    assert self._command_center_2_pos is not None, "There is no position for third command center in the map"
+                    command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_2_pos, first_only=True)
+                    assert command_center is not None, "There is no third command center"
+                    assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command center's queue is full"
                     action_args = dict(source_unit_tag=command_center.tag)
                 case AllActions.BUILD_SUPPLY_DEPOT:
                     position = self.get_next_supply_depot_position(obs)
@@ -560,7 +566,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         enemy_command_centers = self.get_enemy_units(obs, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
         enemy_command_center_positions = [Position(cc.x, cc.y) for cc in enemy_command_centers]
         self._used_command_center_positions = command_center_positions + enemy_command_center_positions
-        # self._command_center_positions = [pos for pos in self._command_center_positions if pos not in command_center_positions]
 
     def use_command_center_position(self, obs: TimeStep, position: Position) -> Position:
         if position not in self._command_center_positions:
@@ -575,7 +580,11 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def get_next_supply_depot_position(self, obs: TimeStep) -> Position:
         next_pos = None
         for idx, candidate_position in enumerate(self._supply_depot_positions):
-            if candidate_position not in self._used_supply_depot_positions:
+            # due to rounding in min-games, the supply depots are placed one unit too far to the right
+            # so that position needs to be checked as well
+            displaced_candidate_position = Position(candidate_position.x+1, candidate_position.y)
+            if candidate_position not in self._used_supply_depot_positions\
+                and displaced_candidate_position not in self._used_supply_depot_positions:
                 next_pos = candidate_position
                 break
 
@@ -849,12 +858,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self._current_episode_stats.add_invalid_action(action)
             action = AllActions.NO_OP
             action_args = None
-        elif action == AllActions.BUILD_BARRACKS:
-            self.use_barracks_position(obs, action_args["target_position"])
-        elif action == AllActions.BUILD_SUPPLY_DEPOT:
-            self.use_supply_depot_position(obs, action_args["target_position"])
-        elif action == AllActions.BUILD_COMMAND_CENTER:
-            self.use_command_center_position(obs, action_args["target_position"])
+        # elif action == AllActions.BUILD_BARRACKS:
+        #     self.use_barracks_position(obs, action_args["target_position"])
+        # elif action == AllActions.BUILD_SUPPLY_DEPOT:
+        #     self.use_supply_depot_position(obs, action_args["target_position"])
+        # elif action == AllActions.BUILD_COMMAND_CENTER:
+        #     self.use_command_center_position(obs, action_args["target_position"])
 
         if is_valid_action:
             self._current_episode_stats.add_valid_action(action)
@@ -964,38 +973,47 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     return True
                 return False
             case AllActions.RECRUIT_SCV_0, _:
+                if self._command_center_0_pos is None:
+                    return False
+
                 if not SC2Costs.SCV.can_pay(obs.observation.player):
                     return False
 
-                command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
-                if len(command_centers) == 0:
+                command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_0_pos, first_only=True)
+                if command_center is None:
                     return False
 
-                if command_centers[0].order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
+                if command_center.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
                     return False
 
                 return True
             case AllActions.RECRUIT_SCV_1, _:
+                if self._command_center_1_pos is None:
+                    return False
+
                 if not SC2Costs.SCV.can_pay(obs.observation.player):
                     return False
 
-                command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
-                if len(command_centers) < 2:
+                command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_1_pos, first_only=True)
+                if command_center is None:
                     return False
 
-                if command_centers[1].order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
+                if command_center.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
                     return False
 
                 return True
             case AllActions.RECRUIT_SCV_2, _:
+                if self._command_center_2_pos is None:
+                    return False
+
                 if not SC2Costs.SCV.can_pay(obs.observation.player):
                     return False
 
-                command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
-                if len(command_centers) < 3:
+                command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_2_pos, first_only=True)
+                if command_center is None:
                     return False
 
-                if command_centers[2].order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
+                if command_center.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
                     return False
 
                 return True
@@ -1147,10 +1165,21 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             unit_tags = [unit_tags] if isinstance(unit_tags, (int, np.int64, np.integer, np.int32)) else unit_tags
             units = filter(lambda u: u.tag in unit_tags, units)
 
+        if positions is not None:
+            positions = [positions] if isinstance(positions, Position) else positions
+            units = filter(lambda u: Position(u.x, u.y) in positions, units)
+
         if completed_only:
             units = filter(lambda u: u.build_progress == 100, units)
 
-        return list(units)
+        unit_list = list(units)
+        if first_only:
+            if len(unit_list) > 0:
+                return unit_list[0]
+            else:
+                return None
+        else:
+            return unit_list
 
     def get_neutral_units(self, obs: TimeStep, unit_types: int | List[int] = None, unit_tags: int | List[int] = None) -> List[features.FeatureUnit]:
         """Get a list of neutral units.
@@ -1336,17 +1365,21 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             pct_command_centers=pct_command_centers,
         )
 
-        for idx in range(3):
-            if idx >= num_command_centers:
-                order_length = -1
-                assigned_harvesters = -1
-            else:
-                cc = command_centers[idx]
-                order_length = cc.order_length
-                assigned_harvesters = cc.assigned_harvesters
+        command_center_0 = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_0_pos, first_only=True)\
+            if self._command_center_0_pos is not None else None
+        command_center_1 = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_1_pos, first_only=True)\
+            if self._command_center_1_pos is not None else None
+        command_center_2 = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_2_pos, first_only=True)\
+            if self._command_center_2_pos is not None else None
 
-            command_centers_state[f"command_center_{idx}_order_length"] = order_length
-            command_centers_state[f"command_center_{idx}_num_workers"] = assigned_harvesters
+        command_centers_state[f"command_center_0_order_length"] = command_center_0.order_length if command_center_0 is not None else -1
+        command_centers_state[f"command_center_0_num_workers"] = command_center_0.assigned_harvesters if command_center_0 is not None else -1
+
+        command_centers_state[f"command_center_1_order_length"] = command_center_1.order_length if command_center_1 is not None else -1
+        command_centers_state[f"command_center_1_num_workers"] = command_center_1.assigned_harvesters if command_center_1 is not None else -1
+
+        command_centers_state[f"command_center_2_order_length"] = command_center_2.order_length if command_center_2 is not None else -1
+        command_centers_state[f"command_center_2_num_workers"] = command_center_2.assigned_harvesters if command_center_2 is not None else -1
 
         # Buildings
         supply_depots = self.get_self_units(obs, unit_types=units.Terran.SupplyDepot)

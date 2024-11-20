@@ -8,7 +8,7 @@ Additionally, the maps need to be configured in the PySC2 library by including t
 mini_games = [
     "BuildMarines",  # 900s
     "BuildMarinesAlt",  # 900s
-    "CollectMinerals",  # 420s
+    "CollectMinerals",  # 900s
     "CollectMineralsAndGas",  # 420s
     "CollectMineralShards",  # 120s
     "DefeatRoaches",  # 120s
