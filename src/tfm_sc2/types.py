@@ -88,13 +88,14 @@ State = namedtuple('State',
                                 # Actions available on the map
                                 # "map_actions",
                                 # Command centers
-                                "num_command_centers", "num_completed_command_centers",
+                                "num_command_centers", "num_completed_command_centers", "max_command_centers", "pct_command_centers",
                                 "command_center_0_order_length", "command_center_1_order_length", "command_center_2_order_length",
                                 "command_center_0_num_workers", "command_center_1_num_workers", "command_center_2_num_workers",
                                 # Workers
                                 "num_workers", "num_idle_workers", "pct_idle_workers", "num_mineral_harvesters", "pct_mineral_harvesters",
                                 # Buildings
-                                "num_supply_depots", "num_completed_supply_depots", "num_barracks", "num_completed_barracks",
+                                "num_supply_depots", "num_completed_supply_depots", "max_supply_depots", "pct_supply_depots",
+                                "num_barracks", "num_completed_barracks", "max_barracks", "pct_barracks",
                                 # Army
                                 "num_marines", "num_idle_marines", "pct_idle_marines", "num_marines_in_queue", "total_army_health",
                                 # Resources

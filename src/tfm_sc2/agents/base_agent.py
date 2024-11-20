@@ -377,24 +377,17 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return self._train
 
     def _setup_positions(self, obs: TimeStep):
-        match self._map_name:
-            case "Simple64":
-                command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)[0]
-                position = "top_left" if command_center.y < 50 else "bottom_right"
-                self.logger.info(f"Map {self._map_name} - Started at '{position}' position")
-                self._supply_depot_positions = self._map_config["positions"][position].get(units.Terran.SupplyDepot, []).copy()
-                self._command_center_positions = self._map_config["positions"][position].get(units.Terran.CommandCenter, []).copy()
-                self._barrack_positions = self._map_config["positions"][position].get(units.Terran.Barracks, []).copy()
-            case "CollectMineralsAndGas":
-                self._supply_depot_positions = self._map_config["positions"].get(units.Terran.SupplyDepot, []).copy()
-                self._command_center_positions = self._map_config["positions"].get(units.Terran.CommandCenter, []).copy()
-                self._barrack_positions = self._map_config["positions"].get(units.Terran.Barracks, []).copy()
-            case _ if not self._map_config["multiple_positions"]:
-                self._supply_depot_positions = self._map_config["positions"].get(units.Terran.SupplyDepot, []).copy()
-                self._command_center_positions = self._map_config["positions"].get(units.Terran.CommandCenter, []).copy()
-                self._barrack_positions = self._map_config["positions"].get(units.Terran.Barracks, []).copy()
-            case _:
-                raise RuntimeError(f"Map {self._map_name} has multiple positions, but no logic to determine which positions to take")
+        if self._map_name == "Simple64":
+            command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)[0]
+            position = "top_left" if command_center.y < 50 else "bottom_right"
+            self.logger.info(f"Map {self._map_name} - Started at '{position}' position")
+            self._supply_depot_positions = self._map_config["positions"][position].get(units.Terran.SupplyDepot, []).copy()
+            self._command_center_positions = self._map_config["positions"][position].get(units.Terran.CommandCenter, []).copy()
+            self._barrack_positions = self._map_config["positions"][position].get(units.Terran.Barracks, []).copy()
+        else:
+            self._supply_depot_positions = self._map_config["positions"].get(units.Terran.SupplyDepot, []).copy()
+            self._command_center_positions = self._map_config["positions"].get(units.Terran.CommandCenter, []).copy()
+            self._barrack_positions = self._map_config["positions"].get(units.Terran.Barracks, []).copy()
 
         self._supply_depot_positions = [Position(t[0], t[1]) for t in self._supply_depot_positions]
         self._command_center_positions = [Position(t[0], t[1]) for t in self._command_center_positions]
@@ -574,6 +567,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             return False
 
         idx = self._command_center_positions.index(position)
+        # reorder the positions list to place the used position last
         self._command_center_positions = self._command_center_positions[idx + 1:] + self._command_center_positions[:idx+1]
 
         return True
@@ -597,6 +591,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             return False
 
         idx = self._supply_depot_positions.index(position)
+        # reorder the positions list to place the used position last
         self._supply_depot_positions = self._supply_depot_positions[idx + 1:] + self._supply_depot_positions[:idx+1]
 
         return True
@@ -610,19 +605,20 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return next_pos
 
+    def update_barracks_positions(self, obs: TimeStep) -> Position:
+        barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
+        barrack_positions = [Position(b.x, b.y) for b in barracks]
+        self._used_barrack_positions = barrack_positions
+
     def use_barracks_position(self, obs: TimeStep, position: Position) -> Position:
         if position not in self._barrack_positions:
             return False
 
         idx = self._barrack_positions.index(position)
+        # reorder the positions list to place the used position last
         self._barrack_positions = self._barrack_positions[idx + 1:] + self._barrack_positions[:idx+1]
 
         return True
-
-    def update_barracks_positions(self, obs: TimeStep) -> Position:
-        barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
-        barrack_positions = [Position(b.x, b.y) for b in barracks]
-        self._used_barrack_positions = barrack_positions
 
     def _get_closest_enemy_position(self, enemies, marine):
         closest_enemy, _ = self._get_closest_enemy(enemies, marine)
@@ -1326,13 +1322,18 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def _get_buildings_state(self, obs):
         def _num_complete(buildings):
             return len(list(filter(self.is_complete, buildings)))
+
         # info about command centers
         command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
         num_command_centers = len(command_centers)
+        max_command_centers = len(self._command_center_positions)
         num_completed_command_centers = _num_complete(command_centers)
+        pct_command_centers = 1 if max_command_centers == 0 else num_command_centers / max_command_centers
         command_centers_state = dict(
             num_command_centers=num_command_centers,
-            num_completed_command_centers=num_completed_command_centers
+            num_completed_command_centers=num_completed_command_centers,
+            max_command_centers=max_command_centers,
+            pct_command_centers=pct_command_centers,
         )
 
         for idx in range(3):
@@ -1350,16 +1351,25 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         # Buildings
         supply_depots = self.get_self_units(obs, unit_types=units.Terran.SupplyDepot)
         num_supply_depots = len(supply_depots)
+        max_supply_depots = len(self._supply_depot_positions)
+        pct_supply_depots = 1 if max_supply_depots == 0 else num_supply_depots / max_supply_depots
+
         barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
         num_barracks = len(barracks)
+        max_barracks = len(self._barrack_positions)
+        pct_barracks = 1 if max_barracks == 0 else num_barracks / max_barracks
 
         buildings_state = dict(
 			# Supply Depots
 			num_supply_depots=num_supply_depots,
 			num_completed_supply_depots=_num_complete(supply_depots),
+			max_supply_depots=max_supply_depots,
+			pct_supply_depots=pct_supply_depots,
 			# Barracks
 			num_barracks=num_barracks,
 			num_completed_barracks=_num_complete(barracks),
+			max_barracks=max_barracks,
+			pct_barracks=pct_barracks,
         )
 
         return {
