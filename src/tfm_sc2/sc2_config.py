@@ -33,18 +33,22 @@ MAP_CONFIGS = dict(
         map_name="Simple64",
         positions={
             "top_left": {
-                units.Terran.CommandCenter: [(23, 72), (57, 31)],
+                units.Terran.CommandCenter: [(26, 35), (24, 72), (56, 31)],
                 units.Terran.SupplyDepot:
-                    [(17, 38), (17, 36), (17, 34), (17, 32), (17, 30)],#, (19, 29), (19, 27), (21, 27), (23, 26), (27, 26)],
+                    [(21, 42), (21, 44), (22, 40), (22, 42), (22, 44), (22, 46), (24, 40), (24, 42), (24, 44), (24, 46),
+                     (26, 40), (26, 42), (26, 44), (26, 46), (28, 40), (28, 42), (28, 44), (28, 46), (30, 40), (30, 42),
+                     (30, 44), (32, 40), (32, 42), (32, 44)], # 24 supply depots
                 units.Terran.Barracks:
-                    [(21, 41), (31, 26),] # (25, 41),
+                    [(32, 28), (35, 39), (36, 28), (38, 39)],
             },
             "bottom_right": {
-                units.Terran.CommandCenter: [(23, 72), (57, 31)],
+                units.Terran.CommandCenter: [(54, 68), (24, 72), (56, 31)],
                 units.Terran.SupplyDepot:
-                    [(51, 78), (54, 78), (55, 77), (57, 77), (59, 77)], #(61, 75), (62, 73), (63, 71), (63, 69), (63, 67), (63, 65), ],
+                    [(48, 60), (48, 62), (48, 64), (50, 60), (50, 62), (50, 64), (52, 58), (52, 60), (52, 62), (52, 64),
+                     (54, 58), (54, 60), (54, 62), (54, 64), (55, 58), (55, 60), (55, 62), (55, 64), (57, 58), (57, 60),
+                     (57, 62), (57, 64), (59, 60), (59, 62)], # 24 supply depots
                 units.Terran.Barracks:
-                    [(47, 75), (56, 63),]#(52, 63),
+                    [(41, 64), (44, 75), (45, 64), (48, 75)],
             }
         },
         multiple_positions=True,
@@ -60,11 +64,12 @@ MAP_CONFIGS = dict(
     CollectMineralsAndGas=dict(
         map_name="CollectMineralsAndGas",
         positions={
-            units.Terran.CommandCenter: [(35, 36)],
+            units.Terran.CommandCenter: [(30, 36), (35, 36)],
             units.Terran.SupplyDepot:
                 [(x, 31) for x in range(30, 35, 2)]
                 + [(x, 41) for x in range(30, 35, 2)]
             ,
+            units.Terran.Barracks: [],
         },
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
@@ -75,11 +80,11 @@ MAP_CONFIGS = dict(
     CollectMinerals=dict(
         map_name="CollectMinerals",
         positions={
-            units.Terran.CommandCenter: [(25, 30), (38, 30)],
+            units.Terran.CommandCenter: [(25, 40), (25, 30), (38, 30)],
             units.Terran.SupplyDepot:
-                # [(x, y) for x in range(34, 44+1, 2) for y in range(37, 45+1, 2)] # 30 supply depots
-                [(x, y) for x in range(34, 42+1, 2) for y in range(37, 39+1, 2)] # 10 supply depots
+                [(x, y) for x in range(32, 42+1, 2) for y in range(40, 46+1, 2)] # 24 supply depots
             ,
+            units.Terran.Barracks: [],
         },
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
@@ -92,16 +97,27 @@ MAP_CONFIGS = dict(
         positions={
             # Seems like no extra CCs can be built here...
             # units.Terran.CommandCenter: [(36, 36), (32, 41)],
-            units.Terran.CommandCenter: [],
+            units.Terran.CommandCenter: [(30, 36)],
             units.Terran.SupplyDepot:
-                # [(x, y) for x in range(35, 38, 2) for y in range(31, 42, 2)]
-                [(42, y) for y in range(29, 44, 2)]
-                + [(x, 29) for x in range(27, 32, 2)]
-                + [(x, 31) for x in range(27, 32, 2)]
-                + [(x, 41) for x in range(27, 32, 2)]
-                + [(x, 43) for x in range(27, 32, 2)]
+                [(x, y) for x in range(29, 43+1, 2) for y in range(40, 44+1, 2)] # 24 supply depots
             ,
-            units.Terran.Barracks: [(36, 29), (39, 29), (36, 42), (39, 42)]
+            units.Terran.Barracks: [(29, 29), (32, 29), (35, 29), (38, 29)]
+        },
+        multiple_positions=False,
+        players=[sc2_env.Agent(sc2_env.Race.terran)],
+        available_actions=[AllActions.NO_OP, AllActions.HARVEST_MINERALS, AllActions.RECRUIT_SCV_0, AllActions.BUILD_SUPPLY_DEPOT, AllActions.BUILD_BARRACKS, AllActions.RECRUIT_MARINE],
+        # Baseline reward of 50
+        get_score_method="get_num_marines_difference",
+        # available_actions=list(set(list(ResourceManagerActions) + list(BaseManagerActions) + list(ArmyRecruitManagerActions)))
+    ),
+    BuildMarinesAlt=dict(
+        map_name="BuildMarinesAlt",
+        positions={
+            units.Terran.CommandCenter: [(30, 36)],
+            units.Terran.SupplyDepot:
+                [(x, y) for x in range(29, 43+1, 2) for y in range(40, 44+1, 2)] # 24 supply depots
+            ,
+            units.Terran.Barracks: [(29, 29), (32, 29), (35, 29), (38, 29)]
         },
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
