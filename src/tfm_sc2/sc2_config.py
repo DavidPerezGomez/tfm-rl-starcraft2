@@ -33,22 +33,55 @@ MAP_CONFIGS = dict(
         map_name="Simple64",
         positions={
             "top_left": {
-                units.Terran.CommandCenter: [(26, 35), (24, 72), (56, 31)],
+                # supply depots positions are very particular. sometimes rounding can throw everything off
+                units.Terran.CommandCenter: [(26, 35), (56, 31), (24, 72)],
                 units.Terran.SupplyDepot:
-                    [(21, 42), (21, 44), (22, 40), (22, 42), (22, 44), (22, 46), (24, 40), (24, 42), (24, 44), (24, 46),
-                     (26, 40), (26, 42), (26, 44), (26, 46), (28, 40), (28, 42), (28, 44), (28, 46), (30, 40), (30, 42),
-                     (30, 44), (32, 40), (32, 42), (32, 44)], # 24 supply depots
+                    [(17, 31), (17, 33), (19, 28), (19, 43), (21, 26), (21, 28), (21, 43), (22, 26), (22, 40), (22, 43),
+                     (24, 40), (24, 43), (26, 26), (28, 26), (28, 40), (28, 43), (30, 37), (30, 40), (30, 43), (32, 26),
+                     (32, 40), (32, 43), (33, 40), (35, 26)], # 24 supply depots
                 units.Terran.Barracks:
-                    [(32, 28), (35, 39), (36, 28), (38, 39)],
+                    [(32, 28), (36, 28), (37, 38), (40, 38)],
             },
             "bottom_right": {
                 units.Terran.CommandCenter: [(54, 68), (24, 72), (56, 31)],
                 units.Terran.SupplyDepot:
-                    [(48, 60), (48, 62), (48, 64), (50, 60), (50, 62), (50, 64), (52, 58), (52, 60), (52, 62), (52, 64),
-                     (54, 58), (54, 60), (54, 62), (54, 64), (55, 58), (55, 60), (55, 62), (55, 64), (57, 58), (57, 60),
-                     (57, 62), (57, 64), (59, 60), (59, 62)], # 24 supply depots
+                    [(63, 73), (63, 71), (61, 76), (61, 61), (59, 78), (59, 76), (59, 61), (57, 78), (57, 64), (57, 61),
+                     (55, 64), (55, 61), (54, 78), (52, 78), (52, 64), (52, 61), (50, 67), (50, 64), (50, 61), (48, 78),
+                     (48, 64), (48, 61), (46, 64), (44, 78)], # 24 supply depots,
                 units.Terran.Barracks:
-                    [(41, 64), (44, 75), (45, 64), (48, 75)],
+                    [(48, 75), (44, 75), (43, 65), (39, 65)],
+            }
+        },
+        multiple_positions=True,
+        players=[
+            sc2_env.Agent(sc2_env.Race.terran),
+            sc2_env.Agent(sc2_env.Race.terran),
+            # sc2_env.Bot(sc2_env.Race.random, sc2_env.Difficulty.very_easy),
+        ],
+        # available_actions=list(AllActions),
+        available_actions=list(BaseManagerActions) + [AllActions.BUILD_BARRACKS],
+        # Baseline reward of 100
+        get_score_method="get_num_marines_difference",
+    ),Simple64Test=dict(
+        map_name="Simple64Test",
+        positions={
+            "top_left": {
+                units.Terran.CommandCenter: [(26, 35), (56, 31), (24, 72)],
+                units.Terran.SupplyDepot:
+                    [(17, 31), (17, 33), (19, 28), (19, 43), (21, 26), (21, 28), (21, 43), (22, 26), (22, 40), (22, 43),
+                     (24, 40), (24, 43), (26, 26), (28, 26), (28, 40), (28, 43), (30, 37), (30, 40), (30, 43), (32, 26),
+                     (32, 40), (32, 43), (33, 40), (35, 26)], # 24 supply depots
+                units.Terran.Barracks:
+                    [(32, 28), (36, 28), (37, 38), (40, 38)],
+            },
+            "bottom_right": {
+                units.Terran.CommandCenter: [(54, 68), (24, 72), (56, 31)],
+                units.Terran.SupplyDepot:
+                    [(63, 73), (63, 71), (61, 76), (61, 61), (59, 78), (59, 76), (59, 61), (57, 78), (57, 64), (57, 61),
+                     (55, 64), (55, 61), (54, 78), (52, 78), (52, 64), (52, 61), (50, 67), (50, 64), (50, 61), (48, 78),
+                     (48, 64), (48, 61), (46, 64), (44, 78)], # 24 supply depots,
+                units.Terran.Barracks:
+                    [(48, 75), (44, 75), (43, 65), (39, 65)],
             }
         },
         multiple_positions=True,
@@ -82,7 +115,7 @@ MAP_CONFIGS = dict(
         positions={
             units.Terran.CommandCenter: [(25, 40), (25, 30), (38, 30)],
             units.Terran.SupplyDepot:
-                [(x, y) for x in range(32, 42+1, 2) for y in range(40, 46+1, 2)] # 24 supply depots
+                [(x, y) for x in range(32, 42+1, 2) for y in range(38, 47+1, 3)] # 24 supply depots
             ,
             units.Terran.Barracks: [],
         },
@@ -99,13 +132,14 @@ MAP_CONFIGS = dict(
             # units.Terran.CommandCenter: [(36, 36), (32, 41)],
             units.Terran.CommandCenter: [(30, 36)],
             units.Terran.SupplyDepot:
-                [(x, y) for x in range(29, 43+1, 2) for y in range(40, 44+1, 2)] # 24 supply depots
+                [(x, y) for x in range(28, 34+1, 2) for y in range(41, 44+1, 3)] +
+                [(x, y) for x in range(36, 42+1, 2) for y in range(35, 44+1, 3)] # 24 supply depots
             ,
             units.Terran.Barracks: [(29, 29), (32, 29), (35, 29), (38, 29)]
         },
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
-        available_actions=[AllActions.NO_OP, AllActions.HARVEST_MINERALS, AllActions.RECRUIT_SCV_0, AllActions.BUILD_SUPPLY_DEPOT, AllActions.BUILD_BARRACKS, AllActions.RECRUIT_MARINE],
+        available_actions=[AllActions.NO_OP, AllActions.HARVEST_MINERALS, AllActions.BUILD_SUPPLY_DEPOT, AllActions.BUILD_BARRACKS, AllActions.RECRUIT_MARINE],
         # Baseline reward of 50
         get_score_method="get_num_marines_difference",
         # available_actions=list(set(list(ResourceManagerActions) + list(BaseManagerActions) + list(ArmyRecruitManagerActions)))
@@ -115,7 +149,8 @@ MAP_CONFIGS = dict(
         positions={
             units.Terran.CommandCenter: [(30, 36)],
             units.Terran.SupplyDepot:
-                [(x, y) for x in range(29, 43+1, 2) for y in range(40, 44+1, 2)] # 24 supply depots
+                [(x, y) for x in range(28, 34+1, 2) for y in range(41, 44+1, 3)] +
+                [(x, y) for x in range(36, 42+1, 2) for y in range(35, 44+1, 3)] # 24 supply depots
             ,
             units.Terran.Barracks: [(29, 29), (32, 29), (35, 29), (38, 29)]
         },
