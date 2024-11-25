@@ -39,7 +39,7 @@ class SingleScriptedAgent(BaseAgent):
         action = AllActions.NO_OP
 
         for a in self._action_order:
-            if self.can_take(obs, a):
+            if a in self._available_actions:
                 action = a
                 break
 

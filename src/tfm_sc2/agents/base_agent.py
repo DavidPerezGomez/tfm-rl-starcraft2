@@ -652,7 +652,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         adjusted_reward = reward + Constants.STEP_REWARD
 
         if not (obs.last() or obs.first()):
-            if self._prev_action_is_valid == False:
+            if not self._prev_action_is_valid:
                 adjusted_reward = Constants.INVALID_ACTION_REWARD
             # elif self._prev_action == AllActions.NO_OP:
             #     adjusted_reward = Constants.NO_OP_REWARD
@@ -737,6 +737,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return torch.Tensor(ohe_actions).to(device=self.device)
 
     def pre_step(self, obs: TimeStep):
+        self._available_actions = self.available_actions(obs)
         self._current_state_tensor, self._current_state_tuple = self._convert_obs_to_state(obs)
         # if not self._exploit:
         reward, adjusted_reward, score = self.get_reward_and_score(obs)
@@ -750,8 +751,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self.setup_actions()
         elif not self._exploit:
             done = obs.last()
-            available_actions = self.available_actions(obs)
-            ohe_available_actions = self._actions_to_network(available_actions)
+            ohe_available_actions = self._actions_to_network(self._available_actions)
             if self._buffer is not None:
                 self._buffer.append(self._prev_state_tensor, self._prev_action, self._prev_action_args, self._current_reward, self._current_adjusted_reward, self._current_score, done, self._current_state_tensor, ohe_available_actions)
 
@@ -876,7 +876,64 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return game_action()
 
     def available_actions(self, obs: TimeStep) -> List[AllActions]:
-        available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"] and self.can_take(obs, a)]
+        can_take = {}
+
+        completed_command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, completed_only=True)
+        cc0_can_exist = self._command_center_0_pos is not None
+        cc1_can_exist = self._command_center_1_pos is not None
+        cc2_can_exist = self._command_center_2_pos is not None
+        command_center_0 = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter,
+                                         positions=[self._command_center_0_pos], first_only=True)
+        cc0_queue_is_full = command_center_0.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH if command_center_0 is not None else True
+        command_center_1 = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter,
+                                         positions=[self._command_center_1_pos], first_only=True)
+        cc1_queue_is_full = command_center_1.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH if command_center_1 is not None else True
+        command_center_2 = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter,
+                                         positions=[self._command_center_2_pos], first_only=True)
+        cc2_queue_is_full = command_center_2.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH if command_center_2 is not None else True
+
+        completed_supply_depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot, completed_only=True)
+        completed_barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks, completed_only=True)
+        barracks_can_queue = any([b.order_length < Constants.BARRACKS_QUEUE_LENGTH for b in completed_barracks])
+
+        minerals = [unit for unit in self._get_units(alliances=PlayerRelative.NEUTRAL) if
+                    Minerals.contains(unit.unit_type)]
+
+        has_idle_workers = self.has_idle_workers()
+        has_harvester_workers = self.has_harvester_workers()
+        has_marines = self.has_marines()
+
+        can_pay_scv = SC2Costs.SCV.can_pay(obs.observation.player)
+        can_pay_marine = SC2Costs.MARINE.can_pay(obs.observation.player)
+        can_pay_supply_depot = SC2Costs.SUPPLY_DEPOT.can_pay(obs.observation.player)
+        can_pay_command_center = SC2Costs.COMMAND_CENTER.can_pay(obs.observation.player)
+        can_pay_barrack = SC2Costs.BARRACKS.can_pay(obs.observation.player)
+
+        next_supply_depot_position = self.get_next_supply_depot_position()
+        next_command_center_position = self.get_next_command_center_position()
+        next_barracks_position = self.get_next_barracks_position()
+
+        enemy_buildings = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
+        enemy_workers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
+        enemy_army = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
+
+        can_take[AllActions.NO_OP] = True
+        can_take[AllActions.HARVEST_MINERALS] = len(completed_command_centers) > 0 and len(minerals) > 0 and has_idle_workers
+        can_take[AllActions.RECRUIT_SCV_0] = cc0_can_exist and can_pay_scv and command_center_0 is not None and not cc0_queue_is_full
+        can_take[AllActions.RECRUIT_SCV_1] = cc1_can_exist and can_pay_scv and command_center_1 is not None and not cc1_queue_is_full
+        can_take[AllActions.RECRUIT_SCV_2] = cc2_can_exist and can_pay_scv and command_center_2 is not None and not cc2_queue_is_full
+        can_take[AllActions.BUILD_SUPPLY_DEPOT] = next_supply_depot_position is not None and can_pay_supply_depot and (has_idle_workers or has_harvester_workers)
+        can_take[AllActions.BUILD_COMMAND_CENTER] = next_command_center_position is not None and can_pay_command_center and (has_idle_workers or has_harvester_workers)
+        can_take[AllActions.BUILD_BARRACKS] = next_barracks_position is not None and can_pay_barrack and (has_idle_workers or has_harvester_workers) and len(completed_supply_depots) > 0
+        can_take[AllActions.RECRUIT_MARINE] = can_pay_marine and len(completed_barracks) > 0 and barracks_can_queue
+        can_take[AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT] = has_marines and len(enemy_buildings) > 0
+        can_take[AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT] = has_marines and len(enemy_workers) > 0
+        can_take[AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT] = has_marines and len(enemy_army) > 0
+        can_take[AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY] = has_marines and len(enemy_buildings) > 0
+        can_take[AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY] = has_marines and len(enemy_workers) > 0
+        can_take[AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY] = has_marines and len(enemy_army) > 0
+
+        available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"] and can_take[a]]
         # if len(available_actions) > 1 and AllActions.NO_OP in available_actions:
         #     available_actions = [a for a in available_actions if a != AllActions.NO_OP]
 

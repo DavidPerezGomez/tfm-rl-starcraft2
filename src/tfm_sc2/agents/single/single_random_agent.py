@@ -36,7 +36,7 @@ class SingleRandomAgent(BaseAgent):
 
     def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any]]:
         if self._action_masking:
-            available_actions = self.available_actions(obs)
+            available_actions = self._available_actions
         else:
             available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"]]
 
