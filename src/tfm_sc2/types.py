@@ -96,8 +96,9 @@ State = namedtuple('State',
                                 # Buildings
                                 "num_supply_depots", "num_completed_supply_depots", "max_supply_depots", "pct_supply_depots",
                                 "num_barracks", "num_completed_barracks", "max_barracks", "pct_barracks",
+                                "barracks_used_queue_length", "barracks_free_queue_length",
                                 # Army
-                                "num_marines", "num_idle_marines", "pct_idle_marines", "num_marines_in_queue", "total_army_health",
+                                "num_marines", "num_idle_marines", "pct_idle_marines", "total_army_health",
                                 # Resources
                                 "free_supply", "minerals", "collection_rate_minerals",
                                 # Scores
@@ -107,7 +108,7 @@ State = namedtuple('State',
                                 "score_cumulative_killed_value_units", "score_cumulative_killed_value_structures",
                                 # By category
                                 "score_food_used_none", "score_food_used_army", "score_food_used_economy",
-                                "score_used_minerals_none", "score_used_minerals_army", "score_used_minerals_economy",
+                                "score_used_minerals_none", "score_used_minerals_army", "score_used_minerals_economy", "score_used_minerals_technology",
                                 # Score by vital
                                 "score_by_vital_total_damage_dealt_life",
                                 "score_by_vital_total_damage_taken_life",

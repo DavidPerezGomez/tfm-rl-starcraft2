@@ -16,13 +16,12 @@ from pysc2.agents import base_agent
 from pysc2.env.environment import TimeStep
 from pysc2.lib import actions, features, units
 from pysc2.lib.features import PlayerRelative
-from pysc2.lib.named_array import NamedNumpyArray
 from typing_extensions import Self, deprecated
 
 from ..actions import AllActions
 from ..constants import Constants, SC2Costs
 from ..networks.experience_replay_buffer import ExperienceReplayBuffer
-from ..types import AgentStage, Gas, Minerals, Position, RewardMethod, State
+from ..types import AgentStage, Minerals, Position, RewardMethod, State
 from ..with_logger import WithLogger
 from .stats import AgentStats, AggregatedEpisodeStats, EpisodeStats
 
@@ -55,7 +54,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                  train: bool = True, action_masking: bool = False, checkpoint_path: Union[str|Path] = None, tracker_update_freq_seconds: int = 10,
                  reward_method: RewardMethod = RewardMethod.REWARD, **kwargs):
         super().__init__(**kwargs)
-
         if torch.cuda.is_available():
             self.device = 'cuda'
         elif torch_directml.device():
@@ -92,10 +90,13 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_adjusted_reward = 0.
         self._reward_method = reward_method
         self._buffer = buffer
+        self._available_actions = None
         self._current_state_tensor = None
         self._current_state_tuple = None
         self._prev_state_tensor = None
         self._prev_state_tuple = None
+        self._current_obs_unit_info = None
+        self._prev_army_spending=0
 
         self._action_to_idx = None
         self._idx_to_action = None
@@ -367,8 +368,11 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_adjusted_reward = 0.
         self._prev_state_tensor = None
         self._prev_state_tuple = None
+        self._available_actions = None
         self._current_state_tensor = None
         self._current_state_tuple = None
+        self._current_obs_unit_info = None
+        self._prev_army_spending=0
 
         current_stage = self._current_agent_stage().name
         self._current_episode_stats = EpisodeStats(map_name=self._map_name, is_burnin=False, is_training=self.is_training, is_exploit=self._exploit, episode=self.current_agent_stats.episode_count, initial_stage=current_stage)
@@ -381,7 +385,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
     def _setup_positions(self, obs: TimeStep):
         if self._map_name == "Simple64":
-            command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)[0]
+            command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, first_only=True)
             position = "top_left" if command_center.y < 50 else "bottom_right"
             self.logger.info(f"Map {self._map_name} - Started at '{position}' position")
             self._supply_depot_positions = self._map_config["positions"][position].get(units.Terran.SupplyDepot, []).copy()
@@ -401,9 +405,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._attempted_barrack_positions = []
         self._attempted_supply_depot_positions = []
         self._attempted_command_center_positions = []
-        self.update_supply_depot_positions(obs)
-        self.update_command_center_positions(obs)
-        self.update_barracks_positions(obs)
+        self.update_supply_depot_positions()
+        self.update_command_center_positions()
+        self.update_barracks_positions()
 
     @property
     @abstractmethod
@@ -416,17 +420,16 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         # return actions.FUNCTIONS.no_op()
 
     def _get_action_args(self, obs: TimeStep, action: AllActions) -> Dict[str, any]:
-        is_valid = True
         try:
             match action:
                 case AllActions.NO_OP:
                     action_args = None
                 case AllActions.HARVEST_MINERALS:
-                    minerals = [unit for unit in obs.observation.raw_units if Minerals.contains(unit.unit_type)]
+                    minerals = [unit for unit in self._get_units(alliances=PlayerRelative.NEUTRAL) if Minerals.contains(unit.unit_type)]
                     assert (len(minerals) > 0), "There are no minerals to harvest"
-                    command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
+                    command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
                     assert (len(command_centers) > 0), "There are no command centers"
-                    idle_workers = self.get_idle_workers(obs)
+                    idle_workers = self.get_idle_workers()
                     assert (len(idle_workers) > 0), "There are no idle workers"
 
                     worker = random.choice(idle_workers)
@@ -435,104 +438,109 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     action_args = dict(source_unit_tag=worker.tag, target_unit_tag=mineral.tag)
                 case AllActions.RECRUIT_SCV_0:
                     assert self._command_center_0_pos is not None, "There is no position for first command center in the map"
-                    command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_0_pos, first_only=True)
+                    command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_0_pos], first_only=True)
                     assert command_center is not None, "There is no first command center"
                     assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command center's queue is full"
                     action_args = dict(source_unit_tag=command_center.tag)
                 case AllActions.RECRUIT_SCV_1:
                     assert self._command_center_1_pos is not None, "There is no position for second command center in the map"
-                    command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_1_pos, first_only=True)
+                    command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_1_pos], first_only=True)
                     assert command_center is not None, "There is no second command center"
                     assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command center's queue is full"
                     action_args = dict(source_unit_tag=command_center.tag)
                 case AllActions.RECRUIT_SCV_2:
                     assert self._command_center_2_pos is not None, "There is no position for third command center in the map"
-                    command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_2_pos, first_only=True)
+                    command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_2_pos], first_only=True)
                     assert command_center is not None, "There is no third command center"
                     assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command center's queue is full"
                     action_args = dict(source_unit_tag=command_center.tag)
                 case AllActions.BUILD_SUPPLY_DEPOT:
-                    position = self.get_next_supply_depot_position(obs)
-                    workers = self.get_idle_workers(obs)
+                    position = self.get_next_supply_depot_position()
+                    workers = self.get_idle_workers()
                     if len(workers) == 0:
-                        workers = self.get_harvester_workers(obs)
+                        workers = self.get_harvester_workers()
                     assert position is not None, "The next supply depot position is None"
                     assert len(workers) > 0, "There are no workers to build the supply depot"
                     worker, _ = self.get_closest(workers, position)
                     action_args = dict(source_unit_tag=worker.tag, target_position=position)
                 case AllActions.BUILD_COMMAND_CENTER:
-                    position = self.get_next_command_center_position(obs)
-                    workers = self.get_idle_workers(obs)
+                    position = self.get_next_command_center_position()
+                    workers = self.get_idle_workers()
                     if len(workers) == 0:
-                        workers = self.get_harvester_workers(obs)
+                        workers = self.get_harvester_workers()
                     assert position is not None, "The next command center position is None"
                     assert len(workers) > 0, "There are no workers to build the command center"
                     worker, _ = self.get_closest(workers, position)
                     action_args = dict(source_unit_tag=worker.tag, target_position=position)
                 case AllActions.BUILD_BARRACKS:
-                    position = self.get_next_barracks_position(obs)
-                    workers = self.get_idle_workers(obs)
+                    position = self.get_next_barracks_position()
+                    workers = self.get_idle_workers()
                     if len(workers) == 0:
-                        workers = self.get_harvester_workers(obs)
+                        workers = self.get_harvester_workers()
                     assert position is not None, "The next barracks position is None"
                     assert len(workers) > 0, "There are no workers to build the barracks"
                     worker, _ = self.get_closest(workers, position)
                     action_args = dict(source_unit_tag=worker.tag, target_position=position)
                 case AllActions.RECRUIT_MARINE:
-                    barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
+                    barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
                     barracks = [cc for cc in barracks if cc.order_length < Constants.BARRACKS_QUEUE_LENGTH]
                     assert len(barracks) > 0, "There are no barracks available"
-                    action_args = dict(source_unit_tag=random.choice(barracks).tag)
+                    barracks = sorted(barracks, key=lambda b: b.order_length)
+                    barrack = barracks[0]
+                    action_args = dict(source_unit_tag=barrack.tag)
                 case AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT:
-                    marines = self.get_idle_marines(obs)
+                    marines = self.get_idle_marines()
                     if len(marines) == 0:
-                        marines = self.get_self_units(obs, unit_types=units.Terran.Marine)
+                        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
                     assert len(marines) > 0, "There are no marines"
-                    enemies = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
+                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemy buildings"
-                    marine = random.choice(marines)
-                    target = self._get_mean_enemy(enemies)
+                    target = self._get_mean_unit(enemies)
+                    target_pos = Position(target.x, target.y)
+                    marine, _ = self.get_closest(marines, target_pos)
                     action_args = dict(source_unit_tag=marine.tag, target_unit_tag=target.tag)
                 case AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT:
-                    marines = self.get_idle_marines(obs)
+                    marines = self.get_idle_marines()
                     if len(marines) == 0:
-                        marines = self.get_self_units(obs, unit_types=units.Terran.Marine)
+                        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
                     assert len(marines) > 0, "There are no marines"
-                    enemies = self.get_enemy_units(obs, unit_types=Constants.WORKER_UNIT_TYPES)
+                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemy workers"
-                    marine = random.choice(marines)
-                    target = self._get_mean_enemy(enemies)
+                    target = self._get_mean_unit(enemies)
+                    target_pos = Position(target.x, target.y)
+                    marine, _ = self.get_closest(marines, target_pos)
                     action_args = dict(source_unit_tag=marine.tag, target_unit_tag=target.tag)
                 case AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT:
-                    marines = self.get_idle_marines(obs)
+                    marines = self.get_idle_marines()
                     if len(marines) == 0:
-                        marines = self.get_self_units(obs, unit_types=units.Terran.Marine)
+                        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
                     assert len(marines) > 0, "There are no marines"
-                    enemies = self.get_enemy_units(obs, unit_types=Constants.ARMY_UNIT_TYPES)
+                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemy units"
-                    marine = random.choice(marines)
-                    target = self._get_mean_enemy(enemies)
+                    target = self._get_mean_unit(enemies)
+                    target_pos = Position(target.x, target.y)
+                    marine, _ = self.get_closest(marines, target_pos)
                     action_args = dict(source_unit_tag=marine.tag, target_unit_tag=target.tag)
                 case AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY:
-                    marines = self.get_entire_army(obs)
+                    marines = self.get_entire_army()
                     assert len(marines) > 0, "There are no marines"
-                    enemies = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
+                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemy buildings"
                     target = enemies[0]
                     marine_tags = [m.tag for m in marines]
                     action_args = dict(source_unit_tag=marine_tags, target_unit_tag=target.tag)
                 case AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY:
-                    marines = self.get_entire_army(obs)
+                    marines = self.get_entire_army()
                     assert len(marines) > 0, "There are no marines"
-                    enemies = self.get_enemy_units(obs, unit_types=Constants.WORKER_UNIT_TYPES)
+                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemy workers"
                     target = enemies[0]
                     marine_tags = [m.tag for m in marines]
                     action_args = dict(source_unit_tag=marine_tags, target_unit_tag=target.tag)
                 case AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY:
-                    marines = self.get_entire_army(obs)
+                    marines = self.get_entire_army()
                     assert len(marines) > 0, "There are no marines"
-                    enemies = self.get_enemy_units(obs, unit_types=Constants.ARMY_UNIT_TYPES)
+                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemy units"
                     target = enemies[0]
                     marine_tags = [m.tag for m in marines]
@@ -545,12 +553,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self.logger.debug(error)
             return None, False
 
-    def get_next_command_center_position(self, obs: TimeStep) -> Position:
+    def get_next_command_center_position(self) -> Position:
         next_pos = None
-        command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
+        command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
         command_centers_positions = [Position(cc.x, cc.y) for cc in command_centers]
 
-        enemy_command_centers = self.get_enemy_units(obs, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
+        enemy_command_centers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
         enemy_command_centers_positions = [Position(cc.x, cc.y) for cc in enemy_command_centers]
         all_cc_positions = command_centers_positions + enemy_command_centers_positions
         for idx, candidate_position in enumerate(self._command_center_positions):
@@ -560,14 +568,14 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return next_pos
 
-    def update_command_center_positions(self, obs: TimeStep) -> Position:
-        command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
+    def update_command_center_positions(self) -> Position:
+        command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
         command_center_positions = [Position(cc.x, cc.y) for cc in command_centers]
-        enemy_command_centers = self.get_enemy_units(obs, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
+        enemy_command_centers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
         enemy_command_center_positions = [Position(cc.x, cc.y) for cc in enemy_command_centers]
         self._used_command_center_positions = command_center_positions + enemy_command_center_positions
 
-    def use_command_center_position(self, obs: TimeStep, position: Position) -> Position:
+    def use_command_center_position(self, position: Position) -> Position:
         if position not in self._command_center_positions:
             return False
 
@@ -577,7 +585,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return True
 
-    def get_next_supply_depot_position(self, obs: TimeStep) -> Position:
+    def get_next_supply_depot_position(self) -> Position:
         next_pos = None
         for idx, candidate_position in enumerate(self._supply_depot_positions):
             # due to rounding in min-games, the supply depots are placed one unit too far to the right
@@ -590,12 +598,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return next_pos
 
-    def update_supply_depot_positions(self, obs: TimeStep) -> Position:
-        supply_depots = self.get_self_units(obs, unit_types=units.Terran.SupplyDepot)
+    def update_supply_depot_positions(self) -> Position:
+        supply_depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot)
         supply_depots_positions = [Position(sd.x, sd.y) for sd in supply_depots]
         self._used_supply_depot_positions = supply_depots_positions
 
-    def use_supply_depot_position(self, obs: TimeStep, position: Position) -> Position:
+    def use_supply_depot_position(self, position: Position) -> Position:
         if position not in self._supply_depot_positions:
             return False
 
@@ -605,7 +613,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return True
 
-    def get_next_barracks_position(self, obs: TimeStep) -> Position:
+    def get_next_barracks_position(self) -> Position:
         next_pos = None
         for idx, candidate_position in enumerate(self._barrack_positions):
             if candidate_position not in self._used_barrack_positions:
@@ -614,12 +622,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return next_pos
 
-    def update_barracks_positions(self, obs: TimeStep) -> Position:
-        barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
+    def update_barracks_positions(self) -> Position:
+        barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
         barrack_positions = [Position(b.x, b.y) for b in barracks]
         self._used_barrack_positions = barrack_positions
 
-    def use_barracks_position(self, obs: TimeStep, position: Position) -> Position:
+    def use_barracks_position(self, position: Position) -> Position:
         if position not in self._barrack_positions:
             return False
 
@@ -629,25 +637,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return True
 
-    def _get_closest_enemy_position(self, enemies, marine):
-        closest_enemy, _ = self._get_closest_enemy(enemies, marine)
-        return Position(closest_enemy.x, closest_enemy.y)
-
-    def _get_closest_enemy(self, enemies, marine):
-        marine_position = Position(marine.x, marine.y)
-        closest_enemy, _ = self.get_closest(enemies, marine_position)
-        return closest_enemy
-
-    def _get_mean_enemy_position(self, enemies):
-        mean_enemy = self._get_mean_enemy(enemies)
-        return Position(mean_enemy.x, mean_enemy.y)
-
-    def _get_mean_enemy(self, enemies):
-        enemy_positions = [Position(e.x, e.y) for e in enemies]
-        mean_enemy_position = np.mean(enemy_positions, axis=0)
-        target_position = Position(int(mean_enemy_position[0]), int(mean_enemy_position[1]))
-        mean_enemy, _ = self.get_closest(enemies, target_position)
-        return mean_enemy
+    def _get_mean_unit(self, units):
+        unit_positions = [Position(e.x, e.y) for e in units]
+        mean_unit_position = np.mean(unit_positions, axis=0)
+        target_position = Position(int(mean_unit_position[0]), int(mean_unit_position[1]))
+        mean_unit, _ = self.get_closest(units, target_position)
+        return mean_unit
 
     def get_reward_and_score(self, obs: TimeStep) -> Tuple[float, float, float]:
         reward = obs.reward
@@ -669,9 +664,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return reward, adjusted_reward, score
 
     def get_army_health_difference(self, obs: TimeStep) -> float:
-        enemy_army = self.get_enemy_units(obs, unit_types=Constants.ARMY_UNIT_TYPES)
+        enemy_army = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
         enemy_total_army_health = sum(map(lambda b: b.health, enemy_army))
-        marines = self.get_self_units(obs, unit_types=units.Terran.Marine)
+        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
         total_army_health = sum(map(lambda b: b.health, marines))
 
         return total_army_health - enemy_total_army_health
@@ -685,13 +680,13 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         else:
             prev_num_marines = 0
 
-        marines = self.get_self_units(obs, unit_types=units.Terran.Marine)
+        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
         num_marines = len(marines)
 
-        return num_marines - prev_num_marines + Constants.STEP_REWARD
+        return num_marines - prev_num_marines# + Constants.STEP_REWARD
 
     def get_enemy_buildings_health(self, obs: TimeStep) -> float:
-        buildings = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
+        buildings = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
         total_health = sum([b.health for b in buildings])
 
         return -total_health
@@ -700,14 +695,14 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return obs.reward
 
     def _convert_obs_to_state(self, obs: TimeStep) -> torch.Tensor:
-        actions_state = self._get_actions_state(obs)
-        building_state = self._get_buildings_state(obs)
-        worker_state = self._get_workers_state(obs)
-        army_state = self._get_army_state(obs)
+        actions_state = self._get_actions_state()
+        building_state = self._get_buildings_state()
+        worker_state = self._get_workers_state()
+        army_state = self._get_army_state()
         resources_state = self._get_resources_state(obs)
         scores_state = self._get_scores_state(obs)
-        neutral_units_state = self._get_neutral_units_state(obs)
-        enemy_state = self._get_enemy_state(obs)
+        neutral_units_state = self._get_neutral_units_state()
+        enemy_state = self._get_enemy_state()
         # Enemy
 
         state_tuple = State(
@@ -743,7 +738,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
     def pre_step(self, obs: TimeStep):
         self._current_state_tensor, self._current_state_tuple = self._convert_obs_to_state(obs)
-
         # if not self._exploit:
         reward, adjusted_reward, score = self.get_reward_and_score(obs)
         self._current_episode_stats.reward += reward
@@ -778,10 +772,17 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self._current_episode_stats.final_stage = self._current_agent_stage().name
             self._tracker_last_update = time.time()
             episode_stage = self._current_episode_stats.initial_stage
-            mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_method=self._reward_method)
+            mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_method=self._reward_method, last_n=5)
             max_mean_rewards = self._best_mean_rewards
             max_mean_rewards_str = f"{max_mean_rewards:.2f}" if max_mean_rewards is not None else "None"
             new_max_mean_rewards = (max_mean_rewards is None) or (mean_rewards >= max_mean_rewards)
+
+            self.current_agent_stats.process_episode(self._current_episode_stats)
+            self.current_aggregated_episode_stats.process_episode(self._current_episode_stats)
+            self._episode_stats[self._map_name].append(self._current_episode_stats)
+            log_msg_parts = ["\n=================", "================="] + self._get_end_of_episode_info_components() + ["=================", "================="]
+            log_msg = "\n".join(log_msg_parts)
+            self.logger.info(log_msg)
 
             if (self.is_training) and (self.checkpoint_path is not None) and new_max_mean_rewards:
                 self.logger.info(f"New max reward during training ({max_mean_rewards_str} -> {mean_rewards:.2f}). Saving best agent...")
@@ -791,13 +792,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 self.save(checkpoint_path=save_path)
                 self.checkpoint_path = checkpoint_path
                 self._best_mean_rewards = mean_rewards
-
-            self.current_agent_stats.process_episode(self._current_episode_stats)
-            self.current_aggregated_episode_stats.process_episode(self._current_episode_stats)
-            self._episode_stats[self._map_name].append(self._current_episode_stats)
-            log_msg_parts = ["\n=================", "================="] + self._get_end_of_episode_info_components() + ["=================", "================="]
-            log_msg = "\n".join(log_msg_parts)
-            self.logger.info(log_msg)
         else:
             now = time.time()
             if (self._tracker is not None) and (now - self._tracker_last_update > self._tracker_update_freq_seconds):
@@ -805,6 +799,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 self.logger.debug(f"Tracker flush - Got extra {emissions} since last update")
                 self._current_episode_stats.emissions += emissions
                 self._tracker_last_update = now
+
+        self._current_obs_unit_info = None
 
     def _get_end_of_episode_info_components(self) -> List[str]:
         num_invalid = sum(self._current_episode_stats.invalid_action_counts.values())
@@ -839,15 +835,17 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         if only_super_step:
             super().step(obs)
             return
+
+        self._current_obs_unit_info = self._gather_obs_info(obs)
         if obs.first():
             self._setup_positions(obs)
         self.pre_step(obs)
 
         super().step(obs)
 
-        self.update_supply_depot_positions(obs)
-        self.update_command_center_positions(obs)
-        self.update_barracks_positions(obs)
+        self.update_supply_depot_positions()
+        self.update_command_center_positions()
+        self.update_barracks_positions()
 
         action, action_args, is_valid_action = self.select_action(obs)
         original_action = action
@@ -884,7 +882,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return available_actions
 
-    def get_idle_marines(self, obs: TimeStep) -> List[features.FeatureUnit]:
+    def get_idle_marines(self) -> List[features.FeatureUnit]:
         """Gets all idle workers.
 
         Args:
@@ -893,28 +891,25 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         Returns:
             List[features.FeatureUnit]: List of idle workers
         """
-        self_marines = self.get_self_units(obs, units.Terran.Marine)
+        self_marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
         idle_marines = filter(self.is_idle, self_marines)
 
         return list(idle_marines)
 
-    def get_entire_army(self, obs: TimeStep) -> List[features.FeatureUnit]:
-        return self.get_self_units(obs, units.Terran.Marine)
+    def get_entire_army(self) -> List[features.FeatureUnit]:
+        return self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
 
-    def has_marines(self, obs: TimeStep) -> bool:
-        return len(self.get_self_units(obs, units.Terran.Marine)) > 0
+    def has_marines(self) -> bool:
+        return len(self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)) > 0
 
-    def has_idle_marines(self, obs: TimeStep) -> bool:
-        return len(self.get_idle_marines(obs)) > 0
+    def has_idle_workers(self) -> bool:
+        return len(self.get_idle_workers()) > 0
 
-    def has_idle_workers(self, obs: TimeStep) -> bool:
-        return len(self.get_idle_workers(obs)) > 0
+    def has_harvester_workers(self) -> bool:
+        return len(self.get_harvester_workers()) > 0
 
-    def has_harvester_workers(self, obs: TimeStep) -> bool:
-        return len(self.get_harvester_workers(obs)) > 0
-
-    def has_workers(self, obs: TimeStep) -> bool:
-        return len(self.get_self_units(obs, units.Terran.SCV)) > 0
+    def has_workers(self) -> bool:
+        return len(self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SCV)) > 0
 
     def can_take(self, obs: TimeStep, action: AllActions, **action_args) -> bool:
         if action == AllActions.NO_OP:
@@ -948,28 +943,28 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 return True
             case AllActions.HARVEST_MINERALS, args if _has_target_unit_tag(args):
                 target_unit_tag = args["target_unit_tag"]
-                command_centers = [unit.tag for unit in self.get_self_units(obs, unit_types=units.Terran.CommandCenter)]
-                if not any(command_centers):
+                command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
+                if len(command_centers) == 0:
                     return False
 
-                minerals = [unit.tag for unit in obs.observation.raw_units if unit.tag == target_unit_tag and Minerals.contains(unit.unit_type)]
+                minerals = [unit for unit in self._get_units(alliances=PlayerRelative.NEUTRAL, unit_tags=target_unit_tag) if Minerals.contains(unit.unit_type)]
                 if len(minerals) == 0:
                     return False
 
-                if self.has_idle_workers(obs):
+                if self.has_idle_workers():
                     return True
                 return False
             case AllActions.HARVEST_MINERALS, _:
-                command_centers = [unit.tag for unit in self.get_self_units(obs, unit_types=units.Terran.CommandCenter)]
+                command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
 
-                if not any(command_centers):
+                if len(command_centers) == 0:
                     return False
 
-                minerals = [unit.tag for unit in obs.observation.raw_units if Minerals.contains(unit.unit_type)]
-                if not any(minerals):
+                minerals = [unit for unit in self._get_units(alliances=PlayerRelative.NEUTRAL) if Minerals.contains(unit.unit_type)]
+                if len(minerals) == 0:
                     return False
 
-                if self.has_idle_workers(obs):
+                if self.has_idle_workers():
                     return True
                 return False
             case AllActions.RECRUIT_SCV_0, _:
@@ -979,7 +974,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 if not SC2Costs.SCV.can_pay(obs.observation.player):
                     return False
 
-                command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_0_pos, first_only=True)
+                command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_0_pos], first_only=True)
                 if command_center is None:
                     return False
 
@@ -994,7 +989,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 if not SC2Costs.SCV.can_pay(obs.observation.player):
                     return False
 
-                command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_1_pos, first_only=True)
+                command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_1_pos], first_only=True)
                 if command_center is None:
                     return False
 
@@ -1009,7 +1004,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 if not SC2Costs.SCV.can_pay(obs.observation.player):
                     return False
 
-                command_center = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_2_pos, first_only=True)
+                command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_2_pos], first_only=True)
                 if command_center is None:
                     return False
 
@@ -1018,32 +1013,32 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
                 return True
             case AllActions.BUILD_SUPPLY_DEPOT, _:
-                target_position = self.get_next_supply_depot_position(obs)
+                target_position = self.get_next_supply_depot_position()
                 if target_position is None:
                     return False
-                if not self.has_idle_workers(obs):
-                    if not self.has_harvester_workers(obs):
+                if not self.has_idle_workers():
+                    if not self.has_harvester_workers():
                         return False
                 if not SC2Costs.SUPPLY_DEPOT.can_pay(obs.observation.player):
                     return False
 
                 return True
             case AllActions.BUILD_COMMAND_CENTER, _:
-                target_position = self.get_next_command_center_position(obs)
+                target_position = self.get_next_command_center_position()
                 if target_position is None:
                     return False
-                command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
+                command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
                 command_centers_positions = [Position(cc.x, cc.y) for cc in command_centers]
                 if target_position in command_centers_positions:
                     return False
 
-                enemy_command_centers = self.get_enemy_units(obs, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
+                enemy_command_centers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
                 enemy_command_centers_positions = [Position(cc.x, cc.y) for cc in enemy_command_centers]
                 if target_position in enemy_command_centers_positions:
                     return False
 
-                if not self.has_idle_workers(obs):
-                    if not self.has_harvester_workers(obs):
+                if not self.has_idle_workers():
+                    if not self.has_harvester_workers():
                         return False
 
                 if not SC2Costs.COMMAND_CENTER.can_pay(obs.observation.player):
@@ -1051,13 +1046,13 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
                 return True
             case AllActions.BUILD_BARRACKS, _:
-                target_position = self.get_next_barracks_position(obs)
+                target_position = self.get_next_barracks_position()
                 if target_position is None:
                     return False
-                if not self.has_idle_workers(obs):
-                    if not self.has_harvester_workers(obs):
+                if not self.has_idle_workers():
+                    if not self.has_harvester_workers():
                         return False
-                supply_depots = self.get_self_units(obs, unit_types=units.Terran.SupplyDepot)
+                supply_depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot)
                 if len(supply_depots) == 0:
                     return False
 
@@ -1067,7 +1062,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 return True
             case AllActions.RECRUIT_MARINE, args if _has_source_unit_tag(args):
                 barracks_tag = args["source_unit_tag"]
-                barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks, unit_tags=barracks_tag)
+                barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks, unit_tags=barracks_tag)
                 barracks = [b for b in barracks if b.order_length < Constants.BARRACKS_QUEUE_LENGTH]
                 if len(barracks) == 0:
                     return False
@@ -1077,7 +1072,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 return True
 
             case AllActions.RECRUIT_MARINE, _:
-                barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
+                barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
                 barracks = [b for b in barracks if b.order_length < Constants.BARRACKS_QUEUE_LENGTH]
                 if len(barracks) == 0:
                     return False
@@ -1087,55 +1082,55 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
                 return True
             case AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT, _:
-                marines = self.get_self_units(obs, unit_types=units.Terran.Marine)
+                marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
                 if len(marines) == 0:
                     return False
-                enemies = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
+                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
                 if len(enemies) == 0:
                     return False
 
                 return True
             case AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT, _:
-                marines = self.get_self_units(obs, unit_types=units.Terran.Marine)
+                marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
                 if len(marines) == 0:
                     return False
-                enemies = self.get_enemy_units(obs, unit_types=Constants.WORKER_UNIT_TYPES)
+                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
                 if len(enemies) == 0:
                     return False
 
                 return True
             case AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT, _:
-                marines = self.get_self_units(obs, unit_types=units.Terran.Marine)
+                marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
                 if len(marines) == 0:
                     return False
-                enemies = self.get_enemy_units(obs, unit_types=Constants.ARMY_UNIT_TYPES)
+                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
                 if len(enemies) == 0:
                     return False
 
                 return True
             case AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY, _:
-                army = self.get_entire_army(obs)
+                army = self.get_entire_army()
                 if len(army) == 0:
                     return False
-                enemies = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
+                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
                 if len(enemies) == 0:
                     return False
 
                 return True
             case AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY, _:
-                army = self.get_entire_army(obs)
+                army = self.get_entire_army()
                 if len(army) == 0:
                     return False
-                enemies = self.get_enemy_units(obs, unit_types=Constants.WORKER_UNIT_TYPES)
+                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
                 if len(enemies) == 0:
                     return False
 
                 return True
             case AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY, _:
-                army = self.get_entire_army(obs)
+                army = self.get_entire_army()
                 if len(army) == 0:
                     return False
-                enemies = self.get_enemy_units(obs, unit_types=Constants.ARMY_UNIT_TYPES)
+                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
                 if len(enemies) == 0:
                     return False
 
@@ -1144,7 +1139,70 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 self.logger.warning(f"Action {action.name} ({action}) is not implemented yet")
                 return False
 
-    def get_self_units(self, obs: TimeStep, unit_types: int | List[int] = None, unit_tags: int | List[int] = None, completed_only: bool = False) -> List[features.FeatureUnit]:
+    def _gather_obs_info(self, obs: TimeStep) -> Dict:
+        unit_info = {}
+        for unit in obs.observation.raw_units:
+            if unit.alliance not in unit_info:
+                unit_info[unit.alliance] = {}
+
+            if unit.unit_type not in unit_info[unit.alliance]:
+                unit_info[unit.alliance][unit.unit_type] = []
+
+            unit_info[unit.alliance][unit.unit_type].append(unit)
+
+        return unit_info
+
+    def _get_units(self, alliances: PlayerRelative | List[PlayerRelative] = None,  unit_types: int | List[int] = None, unit_tags: int | List[int] = None, positions: Position | List[Position] = None, completed_only: bool = False, first_only: bool = False) -> features.FeatureUnit | List[features.FeatureUnit] | None:
+        """
+        Creates a nested dictionary with two levels containing all units in the game.
+        The first level groups de units by player and the second level groups them by unit type.
+        """
+        if self._current_obs_unit_info is None:
+            raise RuntimeError("Unit info is not initialized")
+
+        if alliances is None:
+            alliances = list(self._current_obs_unit_info.keys())
+        else:
+            alliances = [alliances] if isinstance(alliances, PlayerRelative) else alliances
+        type_dicts = [self._current_obs_unit_info[a] for a in alliances if a in self._current_obs_unit_info]
+
+        if unit_types is None:
+            unit_types = list(set(key for dict in type_dicts for key in list(dict.keys())))
+        else:
+            unit_types = [unit_types] if isinstance(unit_types, int) else unit_types
+        unit_list = [unit for dict in type_dicts for type in unit_types if type in dict for unit in dict[type]]
+
+        if unit_tags is not None:
+            unit_tags = [unit_tags] if isinstance(unit_tags, (int, np.int64, np.integer, np.int32)) else unit_tags
+            tags_lambda = lambda unit: unit.tag in unit_tags
+        else:
+            tags_lambda = lambda unit: True
+
+        if positions is not None:
+            positions = [positions] if isinstance(positions, Position) else positions
+            positions_lambda = lambda unit: Position(unit.x, unit.y) in positions
+        else:
+            positions_lambda = lambda unit: True
+
+        if completed_only:
+            completed_lambda = lambda unit: unit.build_progress == 100
+        else:
+            completed_lambda = lambda unit: True
+
+        filter_lambda = lambda unit: tags_lambda(unit) and positions_lambda(unit) and completed_lambda(unit)
+
+        filtered_units = list(filter(filter_lambda , unit_list))
+
+        if first_only:
+            if len(filtered_units) > 0:
+                return filtered_units[0]
+            else:
+                return None
+        else:
+            return filtered_units
+
+    @deprecated("use self._get_units() instead")
+    def get_self_units(self, obs: TimeStep, unit_types: int | List[int] = None, unit_tags: int | List[int] = None, positions: Position | List[Position] = None, completed_only: bool = False, first_only: bool = False) -> features.FeatureUnit|List[features.FeatureUnit]|None:
         """Get a list of the player's own units.
 
         Args:
@@ -1181,6 +1239,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         else:
             return unit_list
 
+    @deprecated("use self._get_units() instead")
     def get_neutral_units(self, obs: TimeStep, unit_types: int | List[int] = None, unit_tags: int | List[int] = None) -> List[features.FeatureUnit]:
         """Get a list of neutral units.
 
@@ -1204,6 +1263,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return list(units)
 
+    @deprecated("use self._get_units() instead")
     def get_enemy_units(self, obs: TimeStep, unit_types: int | List[int] = None, unit_tags: int | List[int] = None) -> List[features.FeatureUnit]:
         """Get a list of the player's enemy units.
 
@@ -1227,12 +1287,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return list(units)
 
-    def get_enemies_info(self, obs: TimeStep) -> List[Dict]:
-        return [
-                dict(tag=e.tag, type=units.get_unit_type(e.unit_type), position=Position(e.x, e.y)) for e in self.get_enemy_units(obs)
-            ]
-
-    def get_workers(self, obs: TimeStep, idle: bool = False, harvesting: bool = False) -> List[features.FeatureUnit]:
+    def get_workers(self, idle: bool = False, harvesting: bool = False) -> List[features.FeatureUnit]:
         """Gets all idle workers.
 
         Args:
@@ -1245,7 +1300,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self.logger.warning(f"Asking for workers that are idle AND harvesting will always result in an empty list")
             return []
 
-        workers = self.get_self_units(obs, units.Terran.SCV)
+        workers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SCV)
 
         if idle:
             workers = filter(self.is_idle, workers)
@@ -1254,7 +1309,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return list(workers)
 
-    def get_idle_workers(self, obs: TimeStep) -> List[features.FeatureUnit]:
+    def get_idle_workers(self) -> List[features.FeatureUnit]:
         """Gets all idle workers.
 
         Args:
@@ -1263,9 +1318,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         Returns:
             List[features.FeatureUnit]: List of idle workers
         """
-        return self.get_workers(obs, idle=True)
+        return self.get_workers(idle=True)
 
-    def get_harvester_workers(self, obs: TimeStep) -> List[features.FeatureUnit]:
+    def get_harvester_workers(self) -> List[features.FeatureUnit]:
         """Get a list of all workers that are currently harvesting.
 
         Args:
@@ -1274,7 +1329,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         Returns:
             List[features.FeatureUnit]: List of workers that are harvesting.
         """
-        return self.get_workers(obs, harvesting=True)
+        return self.get_workers(harvesting=True)
 
     def get_free_supply(self, obs: TimeStep) -> int:
         return obs.observation.player.food_cap - obs.observation.player.food_used
@@ -1300,7 +1355,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         closes_unit_idx = np.random.choice(min_distances)
         return units[closes_unit_idx], min_distance
 
-    def select_closest_worker_to_resource(self, obs: TimeStep, workers: List[features.FeatureUnit], resources: List[features.FeatureUnit]) -> Tuple[features.FeatureUnit, features.FeatureUnit]:
+    def select_closest_worker_to_resource(self, workers: List[features.FeatureUnit], resources: List[features.FeatureUnit]) -> Tuple[features.FeatureUnit, features.FeatureUnit]:
         closest_worker = None
         shortest_distance = None
         closest_resource = None
@@ -1319,7 +1374,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return closest_worker, target_resource
 
-    def select_closest_worker(self, obs: TimeStep, workers: List[features.FeatureUnit], command_centers: List[features.FeatureUnit], resources: List[features.FeatureUnit]) -> Tuple[features.FeatureUnit, features.FeatureUnit]:
+    def select_closest_worker(self, workers: List[features.FeatureUnit], command_centers: List[features.FeatureUnit], resources: List[features.FeatureUnit]) -> Tuple[features.FeatureUnit, features.FeatureUnit]:
         command_center_distances = {}
         command_center_closest_resource = {}
         for command_center in command_centers:
@@ -1348,15 +1403,16 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return closest_worker, target_resource
 
 
-    def _get_buildings_state(self, obs):
-        def _num_complete(buildings):
-            return len(list(filter(self.is_complete, buildings)))
+    def _get_buildings_state(self):
+        def _get_complete(buildings):
+            return list(filter(self.is_complete, buildings))
 
         # info about command centers
-        command_centers = self.get_self_units(obs, unit_types=units.Terran.CommandCenter)
+        command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
         num_command_centers = len(command_centers)
         max_command_centers = len(self._command_center_positions)
-        num_completed_command_centers = _num_complete(command_centers)
+        completed_command_centers = _get_complete(command_centers)
+        num_completed_command_centers = len(completed_command_centers)
         pct_command_centers = 1 if max_command_centers == 0 else num_command_centers / max_command_centers
         command_centers_state = dict(
             num_command_centers=num_command_centers,
@@ -1365,11 +1421,11 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             pct_command_centers=pct_command_centers,
         )
 
-        command_center_0 = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_0_pos, first_only=True)\
+        command_center_0 = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_0_pos], first_only=True)\
             if self._command_center_0_pos is not None else None
-        command_center_1 = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_1_pos, first_only=True)\
+        command_center_1 = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_1_pos], first_only=True)\
             if self._command_center_1_pos is not None else None
-        command_center_2 = self.get_self_units(obs, unit_types=units.Terran.CommandCenter, positions=self._command_center_2_pos, first_only=True)\
+        command_center_2 = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_2_pos], first_only=True)\
             if self._command_center_2_pos is not None else None
 
         command_centers_state[f"command_center_0_order_length"] = command_center_0.order_length if command_center_0 is not None else -1
@@ -1382,27 +1438,36 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         command_centers_state[f"command_center_2_num_workers"] = command_center_2.assigned_harvesters if command_center_2 is not None else -1
 
         # Buildings
-        supply_depots = self.get_self_units(obs, unit_types=units.Terran.SupplyDepot)
+        supply_depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot)
         num_supply_depots = len(supply_depots)
+        completed_supply_depots = _get_complete(supply_depots)
+        num_completed_supply_depots = len(completed_supply_depots)
         max_supply_depots = len(self._supply_depot_positions)
         pct_supply_depots = 1 if max_supply_depots == 0 else num_supply_depots / max_supply_depots
 
-        barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
+        barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
         num_barracks = len(barracks)
+        completed_barracks = _get_complete(barracks)
+        num_completed_barracks = len(completed_barracks)
         max_barracks = len(self._barrack_positions)
         pct_barracks = 1 if max_barracks == 0 else num_barracks / max_barracks
+        barracks_total_queue_length = len(completed_barracks) * Constants.BARRACKS_QUEUE_LENGTH if num_completed_barracks > 0 else -1
+        barracks_used_queue_length = sum([b.order_length for b in completed_barracks]) if num_completed_barracks > 0 else -1
+        barracks_free_queue_length = barracks_total_queue_length - barracks_used_queue_length if num_completed_barracks > 0 else -1
 
         buildings_state = dict(
 			# Supply Depots
 			num_supply_depots=num_supply_depots,
-			num_completed_supply_depots=_num_complete(supply_depots),
+			num_completed_supply_depots=num_completed_supply_depots,
 			max_supply_depots=max_supply_depots,
 			pct_supply_depots=pct_supply_depots,
 			# Barracks
 			num_barracks=num_barracks,
-			num_completed_barracks=_num_complete(barracks),
+			num_completed_barracks=num_completed_barracks,
 			max_barracks=max_barracks,
 			pct_barracks=pct_barracks,
+			barracks_used_queue_length=barracks_used_queue_length,
+			barracks_free_queue_length=barracks_free_queue_length,
         )
 
         return {
@@ -1410,8 +1475,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             **buildings_state
         }
 
-    def _get_workers_state(self, obs: TimeStep) -> Dict[str, int|float]:
-        workers = self.get_workers(obs)
+    def _get_workers_state(self) -> Dict[str, int|float]:
+        workers = self.get_workers()
         num_mineral_harvesters = len([w for w in workers if w.order_id_0 in Constants.HARVEST_ACTIONS])
         num_workers = len(workers)
         num_idle_workers = len([w for w in workers if self.is_idle(w)])
@@ -1427,10 +1492,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             pct_mineral_harvesters=pct_mineral_harvesters,
         )
 
-    def _get_army_state(self, obs: TimeStep) -> Dict[str, int|float]:
-        marines = self.get_self_units(obs, unit_types=units.Terran.Marine)
-        barracks = self.get_self_units(obs, unit_types=units.Terran.Barracks)
-        num_marines_in_queue = sum(map(lambda b: b.order_length, barracks))
+    def _get_army_state(self) -> Dict[str, int|float]:
+        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
         num_marines = len(marines)
         num_idle_workers = len([m for m in marines if self.is_idle(m)])
         pct_idle_workers = 0 if num_marines == 0 else num_idle_workers / num_marines
@@ -1440,7 +1503,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             num_marines=num_marines,
 			num_idle_marines=num_idle_workers,
             pct_idle_marines=pct_idle_workers,
-            num_marines_in_queue=num_marines_in_queue,
             total_army_health=total_army_health,
         )
 
@@ -1466,21 +1528,23 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             "score_used_minerals_none": obs.observation.score_by_category.used_minerals.none,
             "score_used_minerals_army": obs.observation.score_by_category.used_minerals.army,
             "score_used_minerals_economy": obs.observation.score_by_category.used_minerals.economy,
+            "score_used_minerals_technology": obs.observation.score_by_category.used_minerals.technology,
             # Score by vital
             "score_by_vital_total_damage_dealt_life": obs.observation.score_by_vital.total_damage_dealt.life,
             "score_by_vital_total_damage_taken_life": obs.observation.score_by_vital.total_damage_taken.life,
         }
 
-    def _get_neutral_units_state(self, obs: TimeStep) -> Dict[str, int|float]:
-        minerals = [unit.tag for unit in obs.observation.raw_units if Minerals.contains(unit.unit_type)]
+    def _get_neutral_units_state(self) -> Dict[str, int|float]:
+        minerals = [unit for unit in self._get_units(alliances=PlayerRelative.NEUTRAL) if Minerals.contains(unit.unit_type)]
         return dict(
             num_minerals=len(minerals),
         )
 
-    def _get_enemy_state(self, obs: TimeStep) -> Dict[str, int|float]:
-        enemy_buildings = self.get_enemy_units(obs, unit_types=Constants.BUILDING_UNIT_TYPES)
-        enemy_workers = self.get_enemy_units(obs, unit_types=Constants.WORKER_UNIT_TYPES)
-        enemy_army = self.get_enemy_units(obs, unit_types=Constants.ARMY_UNIT_TYPES)
+    def _get_enemy_state(self) -> Dict[str, int|float]:
+        enemy_units = self._get_units(alliances=PlayerRelative.ENEMY)
+        enemy_buildings = list(filter(lambda u: u.unit_type in Constants.BUILDING_UNIT_TYPES, enemy_units))
+        enemy_workers = list(filter(lambda u: u.unit_type in Constants.WORKER_UNIT_TYPES, enemy_units))
+        enemy_army = list(filter(lambda u: u.unit_type in Constants.ARMY_UNIT_TYPES, enemy_units))
 
         return dict(
             enemy_total_building_health=sum(map(lambda b: b.health, enemy_buildings)),
@@ -1488,21 +1552,20 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             enemy_total_army_health=sum(map(lambda b: b.health, enemy_army)),
         )
 
-    def _get_actions_state(self, obs: TimeStep) -> Dict[str, int]:
-        available_actions = self.available_actions(obs)
+    def _get_actions_state(self) -> Dict[str, int]:
         return dict(
-            can_harvest_minerals=int(AllActions.HARVEST_MINERALS in available_actions),
-            can_recruit_worker_0=int(AllActions.RECRUIT_SCV_0 in available_actions),
-            can_recruit_worker_1=int(AllActions.RECRUIT_SCV_1 in available_actions),
-            can_recruit_worker_2=int(AllActions.RECRUIT_SCV_2 in available_actions),
-            can_build_supply_depot=int(AllActions.BUILD_SUPPLY_DEPOT in available_actions),
-            can_build_command_center=int(AllActions.BUILD_COMMAND_CENTER in available_actions),
-            can_build_barracks=int(AllActions.BUILD_BARRACKS in available_actions),
-            can_recruit_marine=int(AllActions.RECRUIT_MARINE in available_actions),
-            can_attack_buildings_with_single=int(AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT in available_actions),
-            can_attack_workers_with_single=int(AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT in available_actions),
-            can_attack_army_with_single=int(AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT in available_actions),
-            can_attack_buildings_with_army=int(AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY in available_actions),
-            can_attack_workers_with_army=int(AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY in available_actions),
-            can_attack_army_with_army=int(AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY in available_actions),
+            can_harvest_minerals=int(AllActions.HARVEST_MINERALS in self._available_actions),
+            can_recruit_worker_0=int(AllActions.RECRUIT_SCV_0 in self._available_actions),
+            can_recruit_worker_1=int(AllActions.RECRUIT_SCV_1 in self._available_actions),
+            can_recruit_worker_2=int(AllActions.RECRUIT_SCV_2 in self._available_actions),
+            can_build_supply_depot=int(AllActions.BUILD_SUPPLY_DEPOT in self._available_actions),
+            can_build_command_center=int(AllActions.BUILD_COMMAND_CENTER in self._available_actions),
+            can_build_barracks=int(AllActions.BUILD_BARRACKS in self._available_actions),
+            can_recruit_marine=int(AllActions.RECRUIT_MARINE in self._available_actions),
+            can_attack_buildings_with_single=int(AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT in self._available_actions),
+            can_attack_workers_with_single=int(AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT in self._available_actions),
+            can_attack_army_with_single=int(AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT in self._available_actions),
+            can_attack_buildings_with_army=int(AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY in self._available_actions),
+            can_attack_workers_with_army=int(AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY in self._available_actions),
+            can_attack_army_with_army=int(AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY in self._available_actions),
         )
