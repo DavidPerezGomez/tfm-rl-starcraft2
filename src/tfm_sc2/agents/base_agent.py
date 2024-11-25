@@ -41,12 +41,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         AllActions.BUILD_COMMAND_CENTER: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Build_CommandCenter_pt("now", source_unit_tag, target_position),
         AllActions.BUILD_BARRACKS: lambda source_unit_tag, target_position: actions.RAW_FUNCTIONS.Build_Barracks_pt("now", source_unit_tag, target_position),
         AllActions.RECRUIT_MARINE: lambda source_unit_tag: actions.RAW_FUNCTIONS.Train_Marine_quick("now", source_unit_tag),
-        AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
-        AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
-        AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
-        AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
-        AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
-        AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
+        AllActions.ATTACK_CLOSEST_BUILDING: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
+        AllActions.ATTACK_CLOSEST_WORKER: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
+        AllActions.ATTACK_CLOSEST_ARMY: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
+        AllActions.ATTACK_BUILDINGS: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
+        AllActions.ATTACK_WORKERS: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
+        AllActions.ATTACK_ARMY: lambda source_unit_tag, target_unit_tag: actions.RAW_FUNCTIONS.Attack_unit("now", source_unit_tag, target_unit_tag),
     }
 
     def __init__(self,
@@ -488,61 +488,58 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     barracks = sorted(barracks, key=lambda b: b.order_length)
                     barrack = barracks[0]
                     action_args = dict(source_unit_tag=barrack.tag)
-                case AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT:
-                    marines = self.get_idle_marines()
-                    if len(marines) == 0:
-                        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
-                    assert len(marines) > 0, "There are no marines"
-                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
-                    assert len(enemies) > 0, "There are no enemy buildings"
-                    target = self._get_mean_unit(enemies)
-                    target_pos = Position(target.x, target.y)
-                    marine, _ = self._get_closest(marines, target_pos)
-                    action_args = dict(source_unit_tag=marine.tag, target_unit_tag=target.tag)
-                case AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT:
-                    marines = self.get_idle_marines()
-                    if len(marines) == 0:
-                        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
-                    assert len(marines) > 0, "There are no marines"
-                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
-                    assert len(enemies) > 0, "There are no enemy workers"
-                    target = self._get_mean_unit(enemies)
-                    target_pos = Position(target.x, target.y)
-                    marine, _ = self._get_closest(marines, target_pos)
-                    action_args = dict(source_unit_tag=marine.tag, target_unit_tag=target.tag)
-                case AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT:
-                    marines = self.get_idle_marines()
-                    if len(marines) == 0:
-                        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
-                    assert len(marines) > 0, "There are no marines"
-                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
-                    assert len(enemies) > 0, "There are no enemy units"
-                    target = self._get_mean_unit(enemies)
-                    target_pos = Position(target.x, target.y)
-                    marine, _ = self._get_closest(marines, target_pos)
-                    action_args = dict(source_unit_tag=marine.tag, target_unit_tag=target.tag)
-                case AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY:
+                case AllActions.ATTACK_CLOSEST_BUILDING:
                     marines = self.get_entire_army()
                     assert len(marines) > 0, "There are no marines"
                     enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemy buildings"
-                    target = enemies[0]
+                    marines_avg_position = self._get_mean_position(marines)
+                    target, _ = self._get_closest(enemies, marines_avg_position)
                     marine_tags = [m.tag for m in marines]
                     action_args = dict(source_unit_tag=marine_tags, target_unit_tag=target.tag)
-                case AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY:
+                case AllActions.ATTACK_CLOSEST_WORKER:
                     marines = self.get_entire_army()
                     assert len(marines) > 0, "There are no marines"
                     enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemy workers"
-                    target = enemies[0]
+                    marines_avg_position = self._get_mean_position(marines)
+                    target, _ = self._get_closest(enemies, marines_avg_position)
                     marine_tags = [m.tag for m in marines]
                     action_args = dict(source_unit_tag=marine_tags, target_unit_tag=target.tag)
-                case AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY:
+                case AllActions.ATTACK_CLOSEST_ARMY:
                     marines = self.get_entire_army()
                     assert len(marines) > 0, "There are no marines"
                     enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
                     assert len(enemies) > 0, "There are no enemy units"
-                    target = enemies[0]
+                    marines_avg_position = self._get_mean_position(marines)
+                    target, _ = self._get_closest(enemies, marines_avg_position)
+                    marine_tags = [m.tag for m in marines]
+                    action_args = dict(source_unit_tag=marine_tags, target_unit_tag=target.tag)
+                case AllActions.ATTACK_BUILDINGS:
+                    marines = self.get_entire_army()
+                    assert len(marines) > 0, "There are no marines"
+                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
+                    assert len(enemies) > 0, "There are no enemy buildings"
+                    enemies_avg_position = self._get_mean_position(enemies)
+                    target, _ = self._get_closest(enemies, enemies_avg_position)
+                    marine_tags = [m.tag for m in marines]
+                    action_args = dict(source_unit_tag=marine_tags, target_unit_tag=target.tag)
+                case AllActions.ATTACK_WORKERS:
+                    marines = self.get_entire_army()
+                    assert len(marines) > 0, "There are no marines"
+                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
+                    assert len(enemies) > 0, "There are no enemy workers"
+                    enemies_avg_position = self._get_mean_position(enemies)
+                    target, _ = self._get_closest(enemies, enemies_avg_position)
+                    marine_tags = [m.tag for m in marines]
+                    action_args = dict(source_unit_tag=marine_tags, target_unit_tag=target.tag)
+                case AllActions.ATTACK_ARMY:
+                    marines = self.get_entire_army()
+                    assert len(marines) > 0, "There are no marines"
+                    enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
+                    assert len(enemies) > 0, "There are no enemy units"
+                    enemies_avg_position = self._get_mean_position(enemies)
+                    target, _ = self._get_closest(enemies, enemies_avg_position)
                     marine_tags = [m.tag for m in marines]
                     action_args = dict(source_unit_tag=marine_tags, target_unit_tag=target.tag)
                 case _:
@@ -976,12 +973,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         can_take[AllActions.BUILD_COMMAND_CENTER] = next_command_center_position is not None and can_pay_command_center and (has_idle_workers or has_harvester_workers)
         can_take[AllActions.BUILD_BARRACKS] = next_barracks_position is not None and can_pay_barrack and (has_idle_workers or has_harvester_workers) and len(completed_supply_depots) > 0
         can_take[AllActions.RECRUIT_MARINE] = can_pay_marine and len(completed_barracks) > 0 and barracks_can_queue
-        can_take[AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT] = has_marines and len(enemy_buildings) > 0
-        can_take[AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT] = has_marines and len(enemy_workers) > 0
-        can_take[AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT] = has_marines and len(enemy_army) > 0
-        can_take[AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY] = has_marines and len(enemy_buildings) > 0
-        can_take[AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY] = has_marines and len(enemy_workers) > 0
-        can_take[AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY] = has_marines and len(enemy_army) > 0
+        can_take[AllActions.ATTACK_CLOSEST_BUILDING] = has_marines and len(enemy_buildings) > 0
+        can_take[AllActions.ATTACK_CLOSEST_WORKER] = has_marines and len(enemy_workers) > 0
+        can_take[AllActions.ATTACK_CLOSEST_ARMY] = has_marines and len(enemy_army) > 0
+        can_take[AllActions.ATTACK_BUILDINGS] = has_marines and len(enemy_buildings) > 0
+        can_take[AllActions.ATTACK_WORKERS] = has_marines and len(enemy_workers) > 0
+        can_take[AllActions.ATTACK_ARMY] = has_marines and len(enemy_army) > 0
 
         available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"] and can_take[a]]
         # if len(available_actions) > 1 and AllActions.NO_OP in available_actions:
@@ -1017,234 +1014,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
     def has_workers(self) -> bool:
         return len(self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SCV)) > 0
-
-    def can_take(self, obs: TimeStep, action: AllActions, **action_args) -> bool:
-        if action == AllActions.NO_OP:
-            return True
-        if action not in self.agent_actions:
-            return False
-        elif action not in self._map_config["available_actions"]:
-            return False
-        elif action not in self._action_to_game:
-            self.logger.warning(f"Tried to validate action {action.name} that is not yet implemented in the action to game mapper: {self._action_to_game.keys()}")
-            return False
-
-        def _has_target_unit_tag(args):
-            return "target_unit_tag" in args and isinstance(args["target_unit_tag"], np.int64)
-
-        def _has_source_unit_tag(args):
-            return "source_unit_tag" in args and isinstance(args["source_unit_tag"], np.int64)
-
-        def _has_source_unit_tags(args, of_length: int = None):
-            if "source_unit_tags" not in args:
-                return False
-            if any(map(lambda t: not isinstance(t, np.int64), args["source_unit_tags"])):
-                return False
-            if of_length is not None and len(args["source_unit_tags"]) != of_length:
-                return False
-
-            return True
-
-        match action, action_args:
-            case AllActions.NO_OP, _:
-                return True
-            case AllActions.HARVEST_MINERALS, args if _has_target_unit_tag(args):
-                target_unit_tag = args["target_unit_tag"]
-                command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
-                if len(command_centers) == 0:
-                    return False
-
-                minerals = [unit for unit in self._get_units(alliances=PlayerRelative.NEUTRAL, unit_tags=target_unit_tag) if Minerals.contains(unit.unit_type)]
-                if len(minerals) == 0:
-                    return False
-
-                if self.has_idle_workers():
-                    return True
-                return False
-            case AllActions.HARVEST_MINERALS, _:
-                command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
-
-                if len(command_centers) == 0:
-                    return False
-
-                minerals = [unit for unit in self._get_units(alliances=PlayerRelative.NEUTRAL) if Minerals.contains(unit.unit_type)]
-                if len(minerals) == 0:
-                    return False
-
-                if self.has_idle_workers():
-                    return True
-                return False
-            case AllActions.RECRUIT_SCV_0, _:
-                if self._command_center_0_pos is None:
-                    return False
-
-                if not SC2Costs.SCV.can_pay(obs.observation.player):
-                    return False
-
-                command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_0_pos], first_only=True)
-                if command_center is None:
-                    return False
-
-                if command_center.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
-                    return False
-
-                return True
-            case AllActions.RECRUIT_SCV_1, _:
-                if self._command_center_1_pos is None:
-                    return False
-
-                if not SC2Costs.SCV.can_pay(obs.observation.player):
-                    return False
-
-                command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_1_pos], first_only=True)
-                if command_center is None:
-                    return False
-
-                if command_center.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
-                    return False
-
-                return True
-            case AllActions.RECRUIT_SCV_2, _:
-                if self._command_center_2_pos is None:
-                    return False
-
-                if not SC2Costs.SCV.can_pay(obs.observation.player):
-                    return False
-
-                command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_2_pos], first_only=True)
-                if command_center is None:
-                    return False
-
-                if command_center.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH:
-                    return False
-
-                return True
-            case AllActions.BUILD_SUPPLY_DEPOT, _:
-                target_position = self.get_next_supply_depot_position()
-                if target_position is None:
-                    return False
-                if not self.has_idle_workers():
-                    if not self.has_harvester_workers():
-                        return False
-                if not SC2Costs.SUPPLY_DEPOT.can_pay(obs.observation.player):
-                    return False
-
-                return True
-            case AllActions.BUILD_COMMAND_CENTER, _:
-                target_position = self.get_next_command_center_position()
-                if target_position is None:
-                    return False
-                command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
-                command_centers_positions = [Position(cc.x, cc.y) for cc in command_centers]
-                if target_position in command_centers_positions:
-                    return False
-
-                enemy_command_centers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
-                enemy_command_centers_positions = [Position(cc.x, cc.y) for cc in enemy_command_centers]
-                if target_position in enemy_command_centers_positions:
-                    return False
-
-                if not self.has_idle_workers():
-                    if not self.has_harvester_workers():
-                        return False
-
-                if not SC2Costs.COMMAND_CENTER.can_pay(obs.observation.player):
-                    return False
-
-                return True
-            case AllActions.BUILD_BARRACKS, _:
-                target_position = self.get_next_barracks_position()
-                if target_position is None:
-                    return False
-                if not self.has_idle_workers():
-                    if not self.has_harvester_workers():
-                        return False
-                supply_depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot)
-                if len(supply_depots) == 0:
-                    return False
-
-                if not SC2Costs.BARRACKS.can_pay(obs.observation.player):
-                    return False
-
-                return True
-            case AllActions.RECRUIT_MARINE, args if _has_source_unit_tag(args):
-                barracks_tag = args["source_unit_tag"]
-                barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks, unit_tags=barracks_tag)
-                barracks = [b for b in barracks if b.order_length < Constants.BARRACKS_QUEUE_LENGTH]
-                if len(barracks) == 0:
-                    return False
-
-                if not SC2Costs.MARINE.can_pay(obs.observation.player):
-                    return False
-                return True
-
-            case AllActions.RECRUIT_MARINE, _:
-                barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
-                barracks = [b for b in barracks if b.order_length < Constants.BARRACKS_QUEUE_LENGTH]
-                if len(barracks) == 0:
-                    return False
-
-                if not SC2Costs.MARINE.can_pay(obs.observation.player):
-                    return False
-
-                return True
-            case AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT, _:
-                marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
-                if len(marines) == 0:
-                    return False
-                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
-                if len(enemies) == 0:
-                    return False
-
-                return True
-            case AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT, _:
-                marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
-                if len(marines) == 0:
-                    return False
-                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
-                if len(enemies) == 0:
-                    return False
-
-                return True
-            case AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT, _:
-                marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
-                if len(marines) == 0:
-                    return False
-                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
-                if len(enemies) == 0:
-                    return False
-
-                return True
-            case AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY, _:
-                army = self.get_entire_army()
-                if len(army) == 0:
-                    return False
-                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
-                if len(enemies) == 0:
-                    return False
-
-                return True
-            case AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY, _:
-                army = self.get_entire_army()
-                if len(army) == 0:
-                    return False
-                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
-                if len(enemies) == 0:
-                    return False
-
-                return True
-            case AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY, _:
-                army = self.get_entire_army()
-                if len(army) == 0:
-                    return False
-                enemies = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
-                if len(enemies) == 0:
-                    return False
-
-                return True
-            case _:
-                self.logger.warning(f"Action {action.name} ({action}) is not implemented yet")
-                return False
 
     def _gather_obs_info(self, obs: TimeStep) -> Dict:
         unit_info = {}
@@ -1636,10 +1405,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             can_build_command_center=int(AllActions.BUILD_COMMAND_CENTER in self._available_actions),
             can_build_barracks=int(AllActions.BUILD_BARRACKS in self._available_actions),
             can_recruit_marine=int(AllActions.RECRUIT_MARINE in self._available_actions),
-            can_attack_buildings_with_single=int(AllActions.ATTACK_BUILDING_WITH_SINGLE_UNIT in self._available_actions),
-            can_attack_workers_with_single=int(AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT in self._available_actions),
-            can_attack_army_with_single=int(AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT in self._available_actions),
-            can_attack_buildings_with_army=int(AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY in self._available_actions),
-            can_attack_workers_with_army=int(AllActions.ATTACK_WORKER_WITH_ENTIRE_ARMY in self._available_actions),
-            can_attack_army_with_army=int(AllActions.ATTACK_ARMY_WITH_ENTIRE_ARMY in self._available_actions),
+            can_attack_closest_buildings=int(AllActions.ATTACK_CLOSEST_BUILDING in self._available_actions),
+            can_attack_closest_workers=int(AllActions.ATTACK_CLOSEST_WORKER in self._available_actions),
+            can_attack_closest_army=int(AllActions.ATTACK_CLOSEST_ARMY in self._available_actions),
+            can_attack_buildings=int(AllActions.ATTACK_BUILDINGS in self._available_actions),
+            can_attack_workers=int(AllActions.ATTACK_WORKERS in self._available_actions),
+            can_attack_army=int(AllActions.ATTACK_ARMY in self._available_actions),
         )
