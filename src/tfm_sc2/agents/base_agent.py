@@ -97,6 +97,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_state_tuple = None
         self._current_obs_unit_info = None
         self._prev_army_spending = 0
+        self._prev_health_difference_score = 0
 
         self._action_to_idx = None
         self._idx_to_action = None
@@ -373,6 +374,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_state_tuple = None
         self._current_obs_unit_info = None
         self._prev_army_spending = 0
+        self._prev_health_difference_score = 0
 
         current_stage = self._current_agent_stage().name
         self._current_episode_stats = EpisodeStats(map_name=self._map_name, is_burnin=False, is_training=self.is_training, is_exploit=self._exploit, episode=self.current_agent_stats.episode_count, initial_stage=current_stage)
@@ -654,10 +656,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return np.linalg.norm(np.array(units_xy) - np.array(position), axis=1)
 
     def _get_distance(self, pos1: Position, pos2: Position):
-        return np.linalg.norm(np.array(pos1) - np.array(pos2), axis=1)
+        return np.linalg.norm(np.array(pos1) - np.array(pos2))
 
     def _get_closest(self, units: List[features.FeatureUnit], position: Position) -> Tuple[features.FeatureUnit, float]:
-        if units is None or len(units) == 0:
+        if position is None or units is None or len(units) == 0:
             return None, None
         distances = self._get_distances(units, position)
         min_distance = distances.min()
@@ -737,6 +739,31 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         total_health = sum([b.health for b in buildings])
 
         return -total_health
+
+    def get_health_difference_score(self) -> float:
+        enemy_buildings = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
+        buildings_health = sum([u.health for u in enemy_buildings])
+        enemy_workers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
+        workers_health = sum([u.health for u in enemy_workers])
+        enemy_army = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
+        army_health = sum([u.health for u in enemy_army])
+        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
+        marines_health = sum([u.health for u in marines])
+
+        return marines_health - (buildings_health + workers_health + army_health)
+
+    def get_health_difference_score_delta(self, obs: TimeStep) -> float:
+        factor = 0.1
+        step_cost = 1
+        health_difference_score = self.get_health_difference_score()
+        if obs.first():
+            self._prev_health_difference_score = health_difference_score
+            return 0
+        else:
+            prev = self._prev_health_difference_score
+            delta = health_difference_score - prev
+            self._prev_health_difference_score = health_difference_score
+            return delta * factor - step_cost
 
     def get_reward_as_score(self, obs: TimeStep) -> float:
         return obs.reward
@@ -981,8 +1008,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         can_take[AllActions.ATTACK_ARMY] = has_marines and len(enemy_army) > 0
 
         available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"] and can_take[a]]
-        # if len(available_actions) > 1 and AllActions.NO_OP in available_actions:
-        #     available_actions = [a for a in available_actions if a != AllActions.NO_OP]
 
         return available_actions
 
