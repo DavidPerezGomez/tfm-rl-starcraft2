@@ -1,5 +1,10 @@
+notebooks/images/
+
 # Generated models
-/models
+models/
+
+# Run configuration
+.run/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

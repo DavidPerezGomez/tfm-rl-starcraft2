@@ -1,7 +1,7 @@
 
 from pysc2.env import sc2_env
 from pysc2.lib import features, units
-from tfm_sc2.actions import AllActions, ArmyAttackManagerActions, BaseManagerActions
+from tfm_sc2.actions import AllActions, ArmyAttackManagerActions, BaseManagerActions, ArmyRecruitManagerActions
 
 SC2_CONFIG = dict(
     agent_interface_format=features.AgentInterfaceFormat(
@@ -62,37 +62,6 @@ MAP_CONFIGS = dict(
         available_actions=list(BaseManagerActions) + [AllActions.BUILD_BARRACKS],
         # Baseline reward of 100
         get_score_method="get_num_marines_difference",
-    ),Simple64Test=dict(
-        map_name="Simple64Test",
-        positions={
-            "top_left": {
-                units.Terran.CommandCenter: [(26, 35), (56, 31), (24, 72)],
-                units.Terran.SupplyDepot:
-                    [(17, 31), (17, 33), (19, 28), (19, 43), (21, 26), (21, 28), (21, 43), (22, 26), (22, 40), (22, 43),
-                     (24, 40), (24, 43), (26, 26), (28, 26), (28, 40), (28, 43), (30, 37), (30, 40), (30, 43), (32, 26),
-                     (32, 40), (32, 43), (33, 40), (35, 26)], # 24 supply depots
-                units.Terran.Barracks:
-                    [(32, 28), (36, 28), (37, 38), (40, 38)],
-            },
-            "bottom_right": {
-                units.Terran.CommandCenter: [(54, 68), (24, 72), (56, 31)],
-                units.Terran.SupplyDepot:
-                    [(63, 73), (63, 71), (61, 76), (61, 61), (59, 78), (59, 76), (59, 61), (57, 78), (57, 64), (57, 61),
-                     (55, 64), (55, 61), (54, 78), (52, 78), (52, 64), (52, 61), (50, 67), (50, 64), (50, 61), (48, 78),
-                     (48, 64), (48, 61), (46, 64), (44, 78)], # 24 supply depots,
-                units.Terran.Barracks:
-                    [(48, 75), (44, 75), (43, 65), (39, 65)],
-            }
-        },
-        multiple_positions=True,
-        players=[
-            sc2_env.Agent(sc2_env.Race.terran),
-            sc2_env.Agent(sc2_env.Race.terran),
-            # sc2_env.Bot(sc2_env.Race.random, sc2_env.Difficulty.very_easy),
-        ],
-        available_actions=list(AllActions),
-        # Baseline reward of 100
-        get_score_method="get_num_marines_difference",
     ),
     CollectMineralsAndGas=dict(
         map_name="CollectMineralsAndGas",
@@ -110,8 +79,8 @@ MAP_CONFIGS = dict(
         # Aim for a
         get_score_method="get_mineral_collection_rate_difference",
     ),
-    CollectMinerals=dict(
-        map_name="CollectMinerals",
+    CollectMineralsRandom=dict(
+        map_name="CollectMineralsRandom",
         positions={
             units.Terran.CommandCenter: [(25, 40), (25, 30), (38, 30)],
             units.Terran.SupplyDepot:
@@ -125,27 +94,23 @@ MAP_CONFIGS = dict(
         # Aim for a
         get_score_method="get_mineral_collection_rate_difference",
     ),
-    BuildMarines=dict(
-        map_name="BuildMarines",
+    CollectMineralsFixed=dict(
+        map_name="CollectMineralsFixed",
         positions={
-            # Seems like no extra CCs can be built here...
-            # units.Terran.CommandCenter: [(36, 36), (32, 41)],
-            units.Terran.CommandCenter: [(30, 36)],
+            units.Terran.CommandCenter: [(25, 40), (25, 30), (38, 30)],
             units.Terran.SupplyDepot:
-                [(x, y) for x in range(28, 34+1, 2) for y in range(41, 44+1, 3)] +
-                [(x, y) for x in range(36, 42+1, 2) for y in range(35, 44+1, 3)] # 24 supply depots
+                [(x, y) for x in range(32, 42+1, 2) for y in range(38, 47+1, 3)] # 24 supply depots
             ,
-            units.Terran.Barracks: [(29, 29), (32, 29), (35, 29), (38, 29)]
+            units.Terran.Barracks: [],
         },
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
-        available_actions=[AllActions.NO_OP, AllActions.HARVEST_MINERALS, AllActions.BUILD_SUPPLY_DEPOT, AllActions.BUILD_BARRACKS, AllActions.RECRUIT_MARINE],
-        # Baseline reward of 50
-        get_score_method="get_num_marines_difference",
-        # available_actions=list(set(list(ResourceManagerActions) + list(BaseManagerActions) + list(ArmyRecruitManagerActions)))
+        available_actions=list(BaseManagerActions),
+        # Aim for a
+        get_score_method="get_mineral_collection_rate_difference",
     ),
-    BuildMarinesAlt=dict(
-        map_name="BuildMarinesAlt",
+    BuildMarinesRandom=dict(
+        map_name="BuildMarinesRandom",
         positions={
             units.Terran.CommandCenter: [(30, 36)],
             units.Terran.SupplyDepot:
@@ -156,10 +121,23 @@ MAP_CONFIGS = dict(
         },
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
-        available_actions=[AllActions.NO_OP, AllActions.HARVEST_MINERALS, AllActions.RECRUIT_SCV_0, AllActions.BUILD_SUPPLY_DEPOT, AllActions.BUILD_BARRACKS, AllActions.RECRUIT_MARINE],
-        # Baseline reward of 50
-        get_score_method="get_num_marines_difference",
-        # available_actions=list(set(list(ResourceManagerActions) + list(BaseManagerActions) + list(ArmyRecruitManagerActions)))
+        available_actions=list(ArmyRecruitManagerActions),
+        get_score_method="get_army_spending_delta",
+    ),
+    BuildMarinesFixed=dict(
+        map_name="BuildMarinesFixed",
+        positions={
+            units.Terran.CommandCenter: [(30, 36)],
+            units.Terran.SupplyDepot:
+                [(x, y) for x in range(28, 34+1, 2) for y in range(41, 44+1, 3)] +
+                [(x, y) for x in range(36, 42+1, 2) for y in range(35, 44+1, 3)] # 24 supply depots
+            ,
+            units.Terran.Barracks: [(29, 29), (32, 29), (35, 29), (38, 29)]
+        },
+        multiple_positions=False,
+        players=[sc2_env.Agent(sc2_env.Race.terran)],
+        available_actions=list(ArmyRecruitManagerActions),
+        get_score_method="get_army_spending_delta",
     ),
     DefeatRoaches=dict(
         map_name="DefeatRoaches",
@@ -197,10 +175,10 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(ArmyAttackManagerActions),
-        get_score_method="get_enemy_buildings_health",
+        get_score_method="get_reward_as_score",
     ),
-    DefeatBaseNoPunish=dict(
-        map_name="DefeatBaseNoPunish",
+    DefeatBases=dict(
+        map_name="DefeatBases",
         positions={
             units.Terran.CommandCenter: [],
             units.Terran.SupplyDepot: [],
@@ -209,6 +187,6 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(ArmyAttackManagerActions),
-        get_score_method="get_enemy_buildings_health",
+        get_score_method="get_health_difference_score_delta",
     )
 )

@@ -7,17 +7,19 @@ Additionally, the maps need to be configured in the PySC2 library by including t
 ```python
 mini_games = [
     "BuildMarines",  # 900s
-    "BuildMarinesAlt",  # 900s
-    "CollectMinerals",  # 900s
+    "BuildMarinesRandom",  # 600s
+    "BuildMarinesFixed",  # 600s
+    "CollectMineralsRandom",  # 720s
+    "CollectMineralsFixed",  # 720s
     "CollectMineralsAndGas",  # 420s
     "CollectMineralShards",  # 120s
     "DefeatRoaches",  # 120s
     "DefeatZerglingsAndBanelings",  # 120s
     "DefeatBase", # 180s
-    "DefeatBaseNoPunish", # 180s
+    "DefeatBases", # 180s
     "FindAndDefeatZerglings",  # 180s
     "MoveToBeacon",  # 120s
 ]
 ```
 
-Said file is part of PySC2, and not this project, so the changes will not be added to version control and will need to be reconfigured if the library is updated or reinstalled.
+This file is part of PySC2, and not this project, so the changes will not be added to version control and will need to be reconfigured if the library is updated or reinstalled.
