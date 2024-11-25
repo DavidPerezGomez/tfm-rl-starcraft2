@@ -99,6 +99,8 @@ State = namedtuple('State',
                                 "barracks_used_queue_length", "barracks_free_queue_length",
                                 # Army
                                 "num_marines", "num_idle_marines", "pct_idle_marines", "total_army_health",
+                                "dist_marine_avg_to_army_avg", "dist_marine_avg_to_worker_avg", "dist_marine_avg_to_building_avg",
+                                "dist_marine_avg_to_closest_army", "dist_marine_avg_to_closest_worker", "dist_marine_avg_to_closest_building",
                                 # Resources
                                 "free_supply", "minerals", "collection_rate_minerals",
                                 # Scores

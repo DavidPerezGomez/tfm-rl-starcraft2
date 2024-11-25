@@ -96,7 +96,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_state_tensor = None
         self._prev_state_tuple = None
         self._current_obs_unit_info = None
-        self._prev_army_spending=0
+        self._prev_army_spending = 0
 
         self._action_to_idx = None
         self._idx_to_action = None
@@ -372,7 +372,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_state_tensor = None
         self._current_state_tuple = None
         self._current_obs_unit_info = None
-        self._prev_army_spending=0
+        self._prev_army_spending = 0
 
         current_stage = self._current_agent_stage().name
         self._current_episode_stats = EpisodeStats(map_name=self._map_name, is_burnin=False, is_training=self.is_training, is_exploit=self._exploit, episode=self.current_agent_stats.episode_count, initial_stage=current_stage)
@@ -433,8 +433,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     assert (len(idle_workers) > 0), "There are no idle workers"
 
                     worker = random.choice(idle_workers)
-                    command_center, _ = self.get_closest(command_centers, Position(worker.x, worker.y))
-                    mineral, _ = self.get_closest(minerals, Position(command_center.x, command_center.y))
+                    command_center, _ = self._get_closest(command_centers, Position(worker.x, worker.y))
+                    mineral, _ = self._get_closest(minerals, Position(command_center.x, command_center.y))
                     action_args = dict(source_unit_tag=worker.tag, target_unit_tag=mineral.tag)
                 case AllActions.RECRUIT_SCV_0:
                     assert self._command_center_0_pos is not None, "There is no position for first command center in the map"
@@ -461,7 +461,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                         workers = self.get_harvester_workers()
                     assert position is not None, "The next supply depot position is None"
                     assert len(workers) > 0, "There are no workers to build the supply depot"
-                    worker, _ = self.get_closest(workers, position)
+                    worker, _ = self._get_closest(workers, position)
                     action_args = dict(source_unit_tag=worker.tag, target_position=position)
                 case AllActions.BUILD_COMMAND_CENTER:
                     position = self.get_next_command_center_position()
@@ -470,7 +470,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                         workers = self.get_harvester_workers()
                     assert position is not None, "The next command center position is None"
                     assert len(workers) > 0, "There are no workers to build the command center"
-                    worker, _ = self.get_closest(workers, position)
+                    worker, _ = self._get_closest(workers, position)
                     action_args = dict(source_unit_tag=worker.tag, target_position=position)
                 case AllActions.BUILD_BARRACKS:
                     position = self.get_next_barracks_position()
@@ -479,7 +479,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                         workers = self.get_harvester_workers()
                     assert position is not None, "The next barracks position is None"
                     assert len(workers) > 0, "There are no workers to build the barracks"
-                    worker, _ = self.get_closest(workers, position)
+                    worker, _ = self._get_closest(workers, position)
                     action_args = dict(source_unit_tag=worker.tag, target_position=position)
                 case AllActions.RECRUIT_MARINE:
                     barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
@@ -497,7 +497,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     assert len(enemies) > 0, "There are no enemy buildings"
                     target = self._get_mean_unit(enemies)
                     target_pos = Position(target.x, target.y)
-                    marine, _ = self.get_closest(marines, target_pos)
+                    marine, _ = self._get_closest(marines, target_pos)
                     action_args = dict(source_unit_tag=marine.tag, target_unit_tag=target.tag)
                 case AllActions.ATTACK_WORKER_WITH_SINGLE_UNIT:
                     marines = self.get_idle_marines()
@@ -508,7 +508,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     assert len(enemies) > 0, "There are no enemy workers"
                     target = self._get_mean_unit(enemies)
                     target_pos = Position(target.x, target.y)
-                    marine, _ = self.get_closest(marines, target_pos)
+                    marine, _ = self._get_closest(marines, target_pos)
                     action_args = dict(source_unit_tag=marine.tag, target_unit_tag=target.tag)
                 case AllActions.ATTACK_ARMY_WITH_SINGLE_UNIT:
                     marines = self.get_idle_marines()
@@ -519,7 +519,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     assert len(enemies) > 0, "There are no enemy units"
                     target = self._get_mean_unit(enemies)
                     target_pos = Position(target.x, target.y)
-                    marine, _ = self.get_closest(marines, target_pos)
+                    marine, _ = self._get_closest(marines, target_pos)
                     action_args = dict(source_unit_tag=marine.tag, target_unit_tag=target.tag)
                 case AllActions.ATTACK_BUILDING_WITH_ENTIRE_ARMY:
                     marines = self.get_entire_army()
@@ -637,12 +637,38 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return True
 
-    def _get_mean_unit(self, units):
+    def _get_mean_position(self, units):
+        if units is None or len(units) == 0:
+            return None
         unit_positions = [Position(e.x, e.y) for e in units]
         mean_unit_position = np.mean(unit_positions, axis=0)
+        return mean_unit_position
+
+    def _get_mean_unit(self, units):
+        mean_unit_position = self._get_mean_position(units)
+        if mean_unit_position is None:
+            return None
         target_position = Position(int(mean_unit_position[0]), int(mean_unit_position[1]))
-        mean_unit, _ = self.get_closest(units, target_position)
+        mean_unit, _ = self._get_closest(units, target_position)
         return mean_unit
+
+    def _get_distances(self, units: List[features.FeatureUnit], position: Position) -> List[float]:
+        units_xy = [(unit.x, unit.y) for unit in units]
+        return np.linalg.norm(np.array(units_xy) - np.array(position), axis=1)
+
+    def _get_distance(self, pos1: Position, pos2: Position):
+        return np.linalg.norm(np.array(pos1) - np.array(pos2), axis=1)
+
+    def _get_closest(self, units: List[features.FeatureUnit], position: Position) -> Tuple[features.FeatureUnit, float]:
+        if units is None or len(units) == 0:
+            return None, None
+        distances = self._get_distances(units, position)
+        min_distance = distances.min()
+        min_distances = np.where(distances == min_distance)[0]
+        # If there is only one minimum distance, that will be returned, otherwise we return one of the elements with the minimum distance
+
+        closes_unit_idx = np.random.choice(min_distances)
+        return units[closes_unit_idx], min_distance
 
     def get_reward_and_score(self, obs: TimeStep) -> Tuple[float, float, float]:
         reward = obs.reward
@@ -1423,67 +1449,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         """Check whether a unit is fully build"""
         return unit.build_progress == 100
 
-    def get_distances(self, units: List[features.FeatureUnit], position: Position) -> List[float]:
-        units_xy = [(unit.x, unit.y) for unit in units]
-        return np.linalg.norm(np.array(units_xy) - np.array(position), axis=1)
-
-    def get_closest(self, units: List[features.FeatureUnit], position: Position) -> Tuple[features.FeatureUnit, float]:
-        distances = self.get_distances(units, position)
-        min_distance = distances.min()
-        min_distances = np.where(distances == min_distance)[0]
-        # If there is only one minimum distance, that will be returned, otherwise we return one of the elements with the minimum distance
-
-        closes_unit_idx = np.random.choice(min_distances)
-        return units[closes_unit_idx], min_distance
-
-    def select_closest_worker_to_resource(self, workers: List[features.FeatureUnit], resources: List[features.FeatureUnit]) -> Tuple[features.FeatureUnit, features.FeatureUnit]:
-        closest_worker = None
-        shortest_distance = None
-        closest_resource = None
-        for worker in workers:
-            worker_position = Position(worker.x, worker.y)
-            closest_resource, total_distance = self.get_closest(resources, worker_position)
-
-            if closest_worker is None:
-                closest_worker = worker
-                shortest_distance = total_distance
-                target_resource = closest_resource
-            elif total_distance <= shortest_distance:
-                closest_worker = worker
-                shortest_distance = total_distance
-                target_resource = closest_resource
-
-        return closest_worker, target_resource
-
-    def select_closest_worker(self, workers: List[features.FeatureUnit], command_centers: List[features.FeatureUnit], resources: List[features.FeatureUnit]) -> Tuple[features.FeatureUnit, features.FeatureUnit]:
-        command_center_distances = {}
-        command_center_closest_resource = {}
-        for command_center in command_centers:
-            command_center_position = Position(command_center.x, command_center.y)
-            closest_resource, distance = self.get_closest(resources, command_center_position)
-            command_center_distances[command_center.tag] = distance
-            command_center_closest_resource[command_center.tag] = closest_resource
-
-        closest_worker = None
-        shortest_distance = None
-        closest_resource = None
-        for worker in workers:
-            worker_position = Position(worker.x, worker.y)
-            closest_command_center, distance_to_command_center = self.get_closest(command_centers, worker_position)
-            distance_to_resource = command_center_distances[closest_command_center.tag]
-            total_distance = distance_to_command_center + distance_to_resource
-            if closest_worker is None:
-                closest_worker = worker
-                shortest_distance = total_distance
-                target_resource = command_center_closest_resource[closest_command_center.tag]
-            elif total_distance <= shortest_distance:
-                closest_worker = worker
-                shortest_distance = total_distance
-                target_resource = command_center_closest_resource[closest_command_center.tag]
-
-        return closest_worker, target_resource
-
-
     def _get_buildings_state(self):
         def _get_complete(buildings):
             return list(filter(self.is_complete, buildings))
@@ -1576,15 +1541,44 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def _get_army_state(self) -> Dict[str, int|float]:
         marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
         num_marines = len(marines)
-        num_idle_workers = len([m for m in marines if self.is_idle(m)])
-        pct_idle_workers = 0 if num_marines == 0 else num_idle_workers / num_marines
+        num_idle_marines = len([m for m in marines if self.is_idle(m)])
+        pct_idle_marines = 0 if num_marines == 0 else num_idle_marines / num_marines
         total_army_health = sum(map(lambda b: b.health, marines))
+
+        enemy_army = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
+        enemy_workers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
+        enemy_buildings = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
+
+        marines_mean_position = self._get_mean_position(marines)
+        enemy_army_mean_position = self._get_mean_position(enemy_army)
+        enemy_workers_mean_position = self._get_mean_position(enemy_workers)
+        enemy_buildings_mean_position = self._get_mean_position(enemy_buildings)
+
+        dist_marine_avg_to_army_avg = self._get_distance(marines_mean_position, enemy_army_mean_position)\
+            if marines_mean_position is not None and enemy_army_mean_position is not None else -1
+        dist_marine_avg_to_worker_avg = self._get_distance(marines_mean_position, enemy_workers_mean_position)\
+            if marines_mean_position is not None and enemy_workers_mean_position is not None else -1
+        dist_marine_avg_to_building_avg = self._get_distance(marines_mean_position, enemy_buildings_mean_position)\
+            if marines_mean_position is not None and enemy_buildings_mean_position is not None else -1
+
+        _, dist_marine_avg_to_closest_army = self._get_closest(enemy_army, marines_mean_position)
+        if dist_marine_avg_to_closest_army is None: dist_marine_avg_to_closest_army = -1
+        _, dist_marine_avg_to_closest_worker = self._get_closest(enemy_workers, marines_mean_position)
+        if dist_marine_avg_to_closest_worker is None: dist_marine_avg_to_closest_worker = -1
+        _, dist_marine_avg_to_closest_building = self._get_closest(enemy_buildings, marines_mean_position)
+        if dist_marine_avg_to_closest_building is None: dist_marine_avg_to_closest_building = -1
 
         return dict(
             num_marines=num_marines,
-			num_idle_marines=num_idle_workers,
-            pct_idle_marines=pct_idle_workers,
+			num_idle_marines=num_idle_marines,
+            pct_idle_marines=pct_idle_marines,
             total_army_health=total_army_health,
+            dist_marine_avg_to_army_avg=dist_marine_avg_to_army_avg,
+            dist_marine_avg_to_worker_avg=dist_marine_avg_to_worker_avg,
+            dist_marine_avg_to_building_avg=dist_marine_avg_to_building_avg,
+            dist_marine_avg_to_closest_army=dist_marine_avg_to_closest_army,
+            dist_marine_avg_to_closest_worker=dist_marine_avg_to_closest_worker,
+            dist_marine_avg_to_closest_building=dist_marine_avg_to_closest_building,
         )
 
     def _get_resources_state(self, obs: TimeStep) -> Dict[str, int|float]:
@@ -1622,10 +1616,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         )
 
     def _get_enemy_state(self) -> Dict[str, int|float]:
-        enemy_units = self._get_units(alliances=PlayerRelative.ENEMY)
-        enemy_buildings = list(filter(lambda u: u.unit_type in Constants.BUILDING_UNIT_TYPES, enemy_units))
-        enemy_workers = list(filter(lambda u: u.unit_type in Constants.WORKER_UNIT_TYPES, enemy_units))
-        enemy_army = list(filter(lambda u: u.unit_type in Constants.ARMY_UNIT_TYPES, enemy_units))
+        enemy_buildings = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
+        enemy_workers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
+        enemy_army = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
 
         return dict(
             enemy_total_building_health=sum(map(lambda b: b.health, enemy_buildings)),
