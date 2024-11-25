@@ -566,7 +566,7 @@ if __name__ == "__main__":
     flags.DEFINE_string("models_path", help="Path where checkpoints are written to/loaded from", required=False, default=DEFAULT_MODELS_PATH)
     flags.DEFINE_string("agent2_path", help="Path to the enemy agent, if you want to use a SingleDQNAgent instead of a random agent as the enemy", required=False, default=None)
     flags.DEFINE_string("buffer_file", help="Path to a buffer to use instead of an empty buffer. Useful to skip burn-ins", required=False, default=None)
-    flags.DEFINE_integer("save_frequency_episodes", default=1, help="We save the agent every X episodes.", lower_bound=1, required=False)
+    flags.DEFINE_integer("save_frequency_episodes", default=40, help="We save the agent every X episodes.", lower_bound=1, required=False)
     flags.DEFINE_boolean("action_masking", default=False, required=False, help="Apply masking of invalid actions.")
     flags.DEFINE_boolean("exploit", default=False, required=False, help="Use the agent in exploitation mode, not for training.")
     flags.DEFINE_boolean("use_scripted_enemy", default=False, required=False, help="Use a scripted enemy instead of a random one.")
