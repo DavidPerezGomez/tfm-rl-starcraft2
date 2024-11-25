@@ -12,9 +12,9 @@ class Cost:
 
     def can_pay(self, player: NamedNumpyArray) -> bool:
         return (
-            (player.minerals >= self.minerals) and
-            (player.vespene >= self.vespene) and
-            (player.food_cap - player.food_used >= self.supply)
+            (self.minerals <= 0 or player.minerals >= self.minerals) and
+            (self.vespene <= 0 or player.vespene >= self.vespene) and
+            (self.supply <= 0 or player.food_cap - player.food_used >= self.supply)
         )
 
 class GameConstraints:
