@@ -674,6 +674,30 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def get_mineral_collection_rate_difference(self, obs: TimeStep) -> float:
         return obs.observation.score_cumulative.collection_rate_minerals / 60
 
+    def get_army_spending(self) -> float:
+        barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
+        # depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot)
+        marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
+        n_marines_in_queue = sum([b.order_length for b in barracks])
+
+        army_spending = SC2Costs.MARINE.minerals * (len(marines) + n_marines_in_queue) # marines
+        # econ_spending = SC2Costs.SUPPLY_DEPOT.minerals * len(depots) # command centers, supply depots, scvs
+        # tech_spending = SC2Costs.BARRACKS.minerals * len(barracks) # barracks
+
+        # return army_spending - (econ_spending + tech_spending)
+        return army_spending
+
+    def get_army_spending_delta(self, obs: TimeStep) -> float:
+        spending = self.get_army_spending()
+        if obs.first():
+            self._prev_army_spending = spending
+            return 0
+        else:
+            prev = self._prev_army_spending
+            delta = spending - prev
+            self._prev_army_spending = spending
+            return delta
+
     def get_num_marines_difference(self, obs: TimeStep) -> float:
         if not obs.first():
             prev_num_marines = self._prev_state_tuple.num_marines
