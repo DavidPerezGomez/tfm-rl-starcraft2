@@ -72,9 +72,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._used_supply_depot_positions = None
         self._used_command_center_positions = None
         self._used_barrack_positions = None
-        self._attempted_supply_depot_positions = None
-        self._attempted_command_center_positions = None
-        self._attempted_barrack_positions = None
         self._train = train
         self._exploit = not train
         self._action_masking = action_masking
@@ -356,9 +353,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._used_supply_depot_positions = None
         self._used_command_center_positions = None
         self._used_barrack_positions = None
-        self._attempted_supply_depot_positions = None
-        self._attempted_command_center_positions = None
-        self._attempted_barrack_positions = None
         self._prev_action = None
         self._prev_action_args = None
         self._prev_action_is_valid = None
@@ -402,9 +396,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._command_center_1_pos = self._command_center_positions[1] if len(self._command_center_positions) > 1 else None
         self._command_center_2_pos = self._command_center_positions[2] if len(self._command_center_positions) > 2 else None
         self._barrack_positions = [Position(t[0], t[1]) for t in self._barrack_positions]
-        self._attempted_barrack_positions = []
-        self._attempted_supply_depot_positions = []
-        self._attempted_command_center_positions = []
         self.update_supply_depot_positions()
         self.update_command_center_positions()
         self.update_barracks_positions()
@@ -572,16 +563,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         enemy_command_center_positions = [Position(cc.x, cc.y) for cc in enemy_command_centers]
         self._used_command_center_positions = command_center_positions + enemy_command_center_positions
 
-    def use_command_center_position(self, position: Position) -> Position:
-        if position not in self._command_center_positions:
-            return False
-
-        idx = self._command_center_positions.index(position)
-        # reorder the positions list to place the used position last
-        self._command_center_positions = self._command_center_positions[idx + 1:] + self._command_center_positions[:idx+1]
-
-        return True
-
     def get_next_supply_depot_position(self) -> Position:
         next_pos = None
         for idx, candidate_position in enumerate(self._supply_depot_positions):
@@ -600,16 +581,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         supply_depots_positions = [Position(sd.x, sd.y) for sd in supply_depots]
         self._used_supply_depot_positions = supply_depots_positions
 
-    def use_supply_depot_position(self, position: Position) -> Position:
-        if position not in self._supply_depot_positions:
-            return False
-
-        idx = self._supply_depot_positions.index(position)
-        # reorder the positions list to place the used position last
-        self._supply_depot_positions = self._supply_depot_positions[idx + 1:] + self._supply_depot_positions[:idx+1]
-
-        return True
-
     def get_next_barracks_position(self) -> Position:
         next_pos = None
         for idx, candidate_position in enumerate(self._barrack_positions):
@@ -623,16 +594,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
         barrack_positions = [Position(b.x, b.y) for b in barracks]
         self._used_barrack_positions = barrack_positions
-
-    def use_barracks_position(self, position: Position) -> Position:
-        if position not in self._barrack_positions:
-            return False
-
-        idx = self._barrack_positions.index(position)
-        # reorder the positions list to place the used position last
-        self._barrack_positions = self._barrack_positions[idx + 1:] + self._barrack_positions[:idx+1]
-
-        return True
 
     def _get_mean_position(self, units):
         if units is None or len(units) == 0:
@@ -926,12 +887,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self._current_episode_stats.add_invalid_action(action)
             action = AllActions.NO_OP
             action_args = None
-        # elif action == AllActions.BUILD_BARRACKS:
-        #     self.use_barracks_position(obs, action_args["target_position"])
-        # elif action == AllActions.BUILD_SUPPLY_DEPOT:
-        #     self.use_supply_depot_position(obs, action_args["target_position"])
-        # elif action == AllActions.BUILD_COMMAND_CENTER:
-        #     self.use_command_center_position(obs, action_args["target_position"])
 
         if is_valid_action:
             self._current_episode_stats.add_valid_action(action)
