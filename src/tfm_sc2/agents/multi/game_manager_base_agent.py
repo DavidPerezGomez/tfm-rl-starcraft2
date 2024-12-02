@@ -29,6 +29,7 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
         self._current_game_manager_action = None
         self._time_displacement = time_displacement
         self._completed_episode_steps = 0
+        self._take_step = True
 
         self._base_manager.exploit()
         self._army_recruit_manager.exploit()
@@ -42,6 +43,7 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
         super().reset()
         self._current_game_manager_action = None
         self._completed_episode_steps = 0
+        self._take_step = True
 
     @override
     def calculate_available_actions(self, obs: TimeStep) -> List[AllActions]:
@@ -66,46 +68,58 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
         actual_action, action_args, is_valid_action = proxy_manager.select_action(obs=obs)
         return actual_action, action_args, is_valid_action, proxy_manager
 
-    def pre_step(self, obs: TimeStep, take_step: bool):
-        if take_step:
-            super().pre_step(obs)
+    @override
+    def setup_positions(self, obs: TimeStep):
+        super().setup_positions(obs)
+        self._base_manager.setup_positions(obs)
+        self._army_recruit_manager.setup_positions(obs)
+        self._army_attack_manager.setup_positions(obs)
+
+    @override
+    def pre_step(self, obs: TimeStep):
+        self._take_step = obs.first() or self._completed_episode_steps % self._time_displacement == 0
+
         self._base_manager.pre_step(obs)
         self._army_recruit_manager.pre_step(obs)
         self._army_attack_manager.pre_step(obs)
+        if self._take_step:
+            super().pre_step(obs)
 
     @override
-    def step(self, obs: TimeStep, **kwargs):
-        take_step = obs.first() or self._completed_episode_steps % self._time_displacement == 0
+    def update_command_center_positions(self):
+        if self._take_step:
+            super().update_command_center_positions()
+        self._base_manager.update_command_center_positions()
+        self._army_recruit_manager.update_command_center_positions()
+        self._army_attack_manager.update_command_center_positions()
 
-        if obs.first():
-            self.setup_positions()
-            self._base_manager.setup_positions()
-            self._army_recruit_manager.setup_positions()
-            self._army_attack_manager.setup_positions()
-
-        self.pre_step(obs, take_step)
-
-        super().step(obs, only_super_step=True)
-
-        if take_step:
-            self.update_supply_depot_positions()
+    @override
+    def update_supply_depot_positions(self):
+        if self._take_step:
+            super().update_supply_depot_positions()
         self._base_manager.update_supply_depot_positions()
         self._army_recruit_manager.update_supply_depot_positions()
         self._army_attack_manager.update_supply_depot_positions()
 
-        if take_step:
-            self.update_command_center_positions()
-        self._base_manager.update_supply_depot_positions()
-        self._army_recruit_manager.update_supply_depot_positions()
-        self._army_attack_manager.update_supply_depot_positions()
-
-        if take_step:
-            self.update_barracks_positions()
+    @override
+    def update_barracks_positions(self):
+        if self._take_step:
+            super().update_barracks_positions()
         self._base_manager.update_barracks_positions()
         self._army_recruit_manager.update_barracks_positions()
         self._army_attack_manager.update_barracks_positions()
 
-        if take_step:
+
+    @override
+    def step(self, obs: TimeStep, **kwargs):
+        if obs.first():
+            self.setup_positions(obs)
+
+        self.pre_step(obs)
+
+        super().step(obs, only_super_step=True)
+
+        if self._take_step:
             self.logger.debug("Taking game manager action")
             self._available_actions = self.calculate_available_actions(obs)
             self._current_game_manager_action = self.select_action(obs)

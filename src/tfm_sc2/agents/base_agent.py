@@ -377,10 +377,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def is_training(self):
         return self._train
 
-    def setup_positions(self):
+    def setup_positions(self, obs: TimeStep):
         if self._map_name == "Simple64":
-            command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, first_only=True)
-            position = "top_left" if command_center.y < 50 else "bottom_right"
+            ally_unit = next(u for u in obs.observation.raw_units if u.alliance==PlayerRelative.SELF)
+            position = "top_left" if ally_unit.y < 50 else "bottom_right"
             self.logger.debug(f"Map {self._map_name} - Started at '{position}' position")
             self._supply_depot_positions = self._map_config["positions"][position].get(units.Terran.SupplyDepot, []).copy()
             self._command_center_positions = self._map_config["positions"][position].get(units.Terran.CommandCenter, []).copy()
@@ -396,9 +396,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._command_center_1_pos = self._command_center_positions[1] if len(self._command_center_positions) > 1 else None
         self._command_center_2_pos = self._command_center_positions[2] if len(self._command_center_positions) > 2 else None
         self._barrack_positions = [Position(t[0], t[1]) for t in self._barrack_positions]
-        self.update_supply_depot_positions()
-        self.update_command_center_positions()
-        self.update_barracks_positions()
 
     @property
     @abstractmethod
@@ -556,7 +553,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return next_pos
 
-    def update_command_center_positions(self) -> Position:
+    def update_command_center_positions(self):
         command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
         command_center_positions = [Position(cc.x, cc.y) for cc in command_centers]
         enemy_command_centers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.COMMAND_CENTER_UNIT_TYPES)
@@ -576,7 +573,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return next_pos
 
-    def update_supply_depot_positions(self) -> Position:
+    def update_supply_depot_positions(self):
         supply_depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot)
         supply_depots_positions = [Position(sd.x, sd.y) for sd in supply_depots]
         self._used_supply_depot_positions = supply_depots_positions
@@ -590,7 +587,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return next_pos
 
-    def update_barracks_positions(self) -> Position:
+    def update_barracks_positions(self):
         barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
         barrack_positions = [Position(b.x, b.y) for b in barracks]
         self._used_barrack_positions = barrack_positions
@@ -766,8 +763,15 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return ohe_actions
 
     def pre_step(self, obs: TimeStep):
+        self._current_obs_unit_info = self._gather_obs_info(obs)
+
+        self.update_supply_depot_positions()
+        self.update_command_center_positions()
+        self.update_barracks_positions()
+
         self._available_actions = self.calculate_available_actions(obs)
         self._current_state_tuple = self._convert_obs_to_state(obs)
+
         # if not self._exploit:
         reward, adjusted_reward, score = self.get_reward_and_score(obs)
         self._current_episode_stats.reward += reward
@@ -867,17 +871,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             super().step(obs)
             return
 
-        self._current_obs_unit_info = self._gather_obs_info(obs)
-
         if obs.first():
-            self.setup_positions()
+            self.setup_positions(obs)
+
         self.pre_step(obs)
 
         super().step(obs)
-
-        self.update_supply_depot_positions()
-        self.update_command_center_positions()
-        self.update_barracks_positions()
 
         action, action_args, is_valid_action = self.select_action(obs)
         original_action = action
