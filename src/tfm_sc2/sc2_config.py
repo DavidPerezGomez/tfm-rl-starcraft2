@@ -91,8 +91,7 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(BaseManagerActions),
-        # Aim for a
-        get_score_method="get_mineral_collection_rate_difference",
+        get_score_method="get_reward_as_score",
     ),
     CollectMineralsFixed=dict(
         map_name="CollectMineralsFixed",
@@ -106,8 +105,7 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(BaseManagerActions),
-        # Aim for a
-        get_score_method="get_mineral_collection_rate_difference",
+        get_score_method="get_reward_as_score",
     ),
     BuildMarinesRandom=dict(
         map_name="BuildMarinesRandom",

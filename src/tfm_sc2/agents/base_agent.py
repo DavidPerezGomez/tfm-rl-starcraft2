@@ -97,6 +97,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_state_tuple = None
         self._current_obs_unit_info = None
         self._prev_army_spending = 0
+        self._prev_diff_marines = 0
         self._prev_health_difference_score = 0
 
         self._action_to_idx = None
@@ -374,6 +375,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_state_tuple = None
         self._current_obs_unit_info = None
         self._prev_army_spending = 0
+        self._prev_diff_marines = 0
         self._prev_health_difference_score = 0
 
         current_stage = self._current_agent_stage().name
@@ -696,9 +698,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return total_army_health - enemy_total_army_health
 
-    def get_mineral_collection_rate_difference(self, obs: TimeStep) -> float:
-        return obs.observation.score_cumulative.collection_rate_minerals / 60
-
     def get_army_spending(self) -> float:
         barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
         # depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot)
@@ -723,22 +722,23 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self._prev_army_spending = spending
             return delta
 
-    def get_num_marines_difference(self, obs: TimeStep) -> float:
-        if not obs.first():
-            prev_num_marines = self._prev_state_tuple.num_marines
-        else:
-            prev_num_marines = 0
-
+    def get_diff_marines(self) -> float:
         marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
-        num_marines = len(marines)
+        enemy_marines = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=units.Terran.Marine)
+        diff_marines = len(marines) - len(enemy_marines)
 
-        return num_marines - prev_num_marines# + Constants.STEP_REWARD
+        return diff_marines
 
-    def get_enemy_buildings_health(self, obs: TimeStep) -> float:
-        buildings = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
-        total_health = sum([b.health for b in buildings])
-
-        return -total_health
+    def get_diff_marines_delta(self, obs: TimeStep) -> float:
+        diff_marines = self.get_diff_marines()
+        if obs.first() or obs.last(): # ignore last step since the game seems to delete all units, so the difference becomes 0 and that can cause a large reward or penalty
+            self._prev_diff_marines = diff_marines
+            return 0
+        else:
+            prev = self._prev_diff_marines
+            delta = diff_marines - prev
+            self._prev_diff_marines = diff_marines
+            return delta
 
     def get_health_difference_score(self) -> float:
         enemy_buildings = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
