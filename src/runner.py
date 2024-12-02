@@ -448,6 +448,13 @@ def main(unused_argv):
                     if current_episode_failures >= max_episode_failures:
                         logger.error(f"Reached max number of allowed episode failures, stopping run")
 
+                except Exception as error:
+                    logger.warning("Error encountered, trying to restart the episode again")
+                    logger.warning(error)
+                    current_episode_failures += 1
+                    if current_episode_failures >= max_episode_failures:
+                        logger.error(f"Reached max number of allowed episode failures, stopping run")
+
             logger.info(f"Finished burnin after {burnin_episodes} episodes")
 
         num_wins = 0
