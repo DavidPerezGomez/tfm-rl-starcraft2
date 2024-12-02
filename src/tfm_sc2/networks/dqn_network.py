@@ -71,16 +71,16 @@ class DQNNetwork(WithLogger, nn.Module, ABC):
         Returns:
             int: Selected action
         """
-        self.logger.info("Selecting random action.")
+        self.logger.debug("Selecting random action.")
         if valid_actions is not None:
             return np.random.choice(np.where(valid_actions == 1)[0])
 
         return np.random.choice(self.actions)
 
     def get_greedy_action(self, state: Union[np.ndarray, list, tuple], valid_actions: List = None):
-        self.logger.info(f"Selecting greedy action with q-vals {qvals}.")
         state_tensor = torch.Tensor(state).to(device=self.device)
         qvals = self.get_qvals(state_tensor)
+        self.logger.debug(f"Selecting greedy action with q-vals {qvals}.")
         if valid_actions is not None:
             invalid_indices = np.where(valid_actions == 0)[0]
             qvals[invalid_indices] = -torch.inf

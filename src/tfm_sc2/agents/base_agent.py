@@ -381,7 +381,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         if self._map_name == "Simple64":
             command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, first_only=True)
             position = "top_left" if command_center.y < 50 else "bottom_right"
-            self.logger.info(f"Map {self._map_name} - Started at '{position}' position")
+            self.logger.debug(f"Map {self._map_name} - Started at '{position}' position")
             self._supply_depot_positions = self._map_config["positions"][position].get(units.Terran.SupplyDepot, []).copy()
             self._command_center_positions = self._map_config["positions"][position].get(units.Terran.CommandCenter, []).copy()
             self._barrack_positions = self._map_config["positions"][position].get(units.Terran.Barracks, []).copy()

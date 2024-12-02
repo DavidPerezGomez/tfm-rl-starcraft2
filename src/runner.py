@@ -2,6 +2,7 @@ import time
 import logging
 import pickle
 from pathlib import Path
+from telnetlib import DEBUGLEVEL
 
 import torch
 from absl import app, flags
@@ -55,7 +56,7 @@ def setup_logging(log_file: str = None):
     if log_file  is not None:
         log_file: Path = Path(log_file)
         log_file.parent.mkdir(exist_ok=True, parents=True)
-    WithLogger.init_logging(stream_level=logging.INFO, file_name=log_file)
+    WithLogger.init_logging(stream_level=logging.INFO, file_name=log_file, file_level=logging.DEBUG)
     absl_logger = logging.getLogger("absl")
     absl_logger.setLevel(logging.INFO)
 
@@ -185,7 +186,7 @@ def main(unused_argv):
     log_file = save_path / FLAGS.log_file
     setup_logging(log_file)
     logger = MainLogger.get()
-    logger.info(f"Running with flags {FLAGS.flags_into_string()}")
+    logger.debug(f"Running with flags {FLAGS.flags_into_string()}")
     SC2_CONFIG["visualize"] = FLAGS.visualize
 
     map_name = FLAGS.map_name

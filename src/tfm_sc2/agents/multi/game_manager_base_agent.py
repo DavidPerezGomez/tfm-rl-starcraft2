@@ -106,7 +106,7 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
         self._army_attack_manager.update_barracks_positions()
 
         if take_step:
-            self.logger.info("Taking game manager action")
+            self.logger.debug("Taking game manager action")
             self._available_actions = self.calculate_available_actions(obs)
             self._current_game_manager_action = self.select_action(obs)
 
