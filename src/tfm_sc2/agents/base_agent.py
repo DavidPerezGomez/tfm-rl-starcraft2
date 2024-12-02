@@ -805,7 +805,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return ohe_actions
 
     def pre_step(self, obs: TimeStep):
-        self._available_actions = self.available_actions(obs)
+        self._available_actions = self.calculate_available_actions(obs)
         self._current_state_tuple = self._convert_obs_to_state(obs)
         # if not self._exploit:
         reward, adjusted_reward, score = self.get_reward_and_score(obs)
@@ -946,7 +946,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return game_action()
 
-    def available_actions(self, obs: TimeStep) -> List[AllActions]:
+    def calculate_available_actions(self, obs: TimeStep) -> List[AllActions]:
         can_take = {}
 
         completed_command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, completed_only=True)

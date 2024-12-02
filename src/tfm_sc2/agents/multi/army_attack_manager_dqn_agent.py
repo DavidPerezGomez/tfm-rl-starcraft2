@@ -10,8 +10,8 @@ from ...actions import AllActions
 class ArmyAttackManagerDQNAgent(WithArmyAttackManagerActions, DQNAgent):
 
     @override
-    def available_actions(self, obs: TimeStep) -> List[AllActions]:
-        available_actions = super().available_actions(obs)
+    def calculate_available_actions(self, obs: TimeStep) -> List[AllActions]:
+        available_actions = super().calculate_available_actions(obs)
 
         if len(available_actions) > 1 and AllActions.NO_OP in available_actions:
             available_actions = [a for a in available_actions if a != AllActions.NO_OP]
