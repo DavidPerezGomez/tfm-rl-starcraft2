@@ -35,12 +35,12 @@ class GameManagerDQNAgent(GameManagerBaseAgent, DQNAgent):
             if not self._status_flags["train_started"]:
                 self.logger.info(f"Starting training")
                 self._status_flags["train_started"] = True
-            raw_action = self.main_network.get_action(self._current_state_tensor, epsilon=self.epsilon, valid_actions=valid_actions)
+            raw_action = self.main_network.get_action(self._current_state_tuple, epsilon=self.epsilon, valid_actions=valid_actions)
         else:
             if not self._status_flags["exploit_started"]:
                 self.logger.info(f"Starting exploit")
                 self._status_flags["exploit_started"] = True
-            raw_action = self.main_network.get_greedy_action(self._current_state_tensor, valid_actions=valid_actions)
+            raw_action = self.main_network.get_greedy_action(self._current_state_tuple, valid_actions=valid_actions)
 
         # Convert the "raw" action to a the right type of action
         action = self._idx_to_action[raw_action]

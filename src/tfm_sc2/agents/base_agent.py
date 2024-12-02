@@ -91,9 +91,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._reward_method = reward_method
         self._buffer = buffer
         self._available_actions = None
-        self._current_state_tensor = None
         self._current_state_tuple = None
-        self._prev_state_tensor = None
         self._prev_state_tuple = None
         self._current_obs_unit_info = None
         self._prev_army_spending = 0
@@ -368,10 +366,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_score = 0.
         self._current_reward = 0.
         self._current_adjusted_reward = 0.
-        self._prev_state_tensor = None
         self._prev_state_tuple = None
         self._available_actions = None
-        self._current_state_tensor = None
         self._current_state_tuple = None
         self._current_obs_unit_info = None
         self._prev_army_spending = 0
@@ -768,7 +764,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def get_reward_as_score(self, obs: TimeStep) -> float:
         return obs.reward
 
-    def _convert_obs_to_state(self, obs: TimeStep) -> torch.Tensor:
+    def _convert_obs_to_state(self, obs: TimeStep) -> Tuple:
         actions_state = self._get_actions_state()
         building_state = self._get_buildings_state()
         worker_state = self._get_workers_state()
@@ -789,9 +785,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             **neutral_units_state,
             **enemy_state
         )
-        return torch.Tensor(state_tuple).to(device=self.device), state_tuple
+        return state_tuple
 
-    def _actions_to_network(self, actions: List[AllActions], as_tensor: bool = False) -> List|torch.Tensor:
+    def _actions_to_network(self, actions: List[AllActions]) -> List:
         """Converts a list of AllAction elements to a one-hot encoded version that the network can use.
 
         Args:
@@ -806,13 +802,11 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             action_idx = self._action_to_idx[action]
             ohe_actions[action_idx] = 1
 
-        if not as_tensor:
-            return ohe_actions
-        return torch.Tensor(ohe_actions).to(device=self.device)
+        return ohe_actions
 
     def pre_step(self, obs: TimeStep):
         self._available_actions = self.available_actions(obs)
-        self._current_state_tensor, self._current_state_tuple = self._convert_obs_to_state(obs)
+        self._current_state_tuple = self._convert_obs_to_state(obs)
         # if not self._exploit:
         reward, adjusted_reward, score = self.get_reward_and_score(obs)
         self._current_episode_stats.reward += reward
@@ -827,11 +821,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             done = obs.last()
             ohe_available_actions = self._actions_to_network(self._available_actions)
             if self._buffer is not None:
-                self._buffer.append(self._prev_state_tensor, self._prev_action, self._prev_action_args, self._current_reward, self._current_adjusted_reward, self._current_score, done, self._current_state_tensor, ohe_available_actions)
+                self._buffer.append(self._prev_state_tuple, self._prev_action, self._prev_action_args, self._current_reward, self._current_adjusted_reward, self._current_score, done, self._current_state_tuple, ohe_available_actions)
 
     def post_step(self, obs: TimeStep, action: AllActions, action_args: Dict[str, Any], original_action: AllActions, original_action_args: Dict[str, Any], is_valid_action: bool):
         self._prev_score = obs.observation.score_cumulative.score
-        self._prev_state_tensor = self._current_state_tensor
         self._prev_state_tuple = self._current_state_tuple
         self._prev_action = self._action_to_idx[original_action]
         self._prev_action_args = original_action_args
@@ -911,6 +904,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             return
 
         self._current_obs_unit_info = self._gather_obs_info(obs)
+
         if obs.first():
             self._setup_positions(obs)
         self.pre_step(obs)
@@ -940,6 +934,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         if is_valid_action:
             self._current_episode_stats.add_valid_action(action)
             self.logger.debug(f"[Step {self.steps}] Performing action {action.name} with args: {action_args}")
+
         game_action = self._action_to_game[action]
 
         self.post_step(obs, action, action_args, original_action, original_action_args, is_valid_action)

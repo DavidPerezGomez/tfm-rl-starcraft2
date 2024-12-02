@@ -76,7 +76,8 @@ class DQNNetwork(nn.Module, ABC):
         return np.random.choice(self.actions)
 
     def get_greedy_action(self, state: Union[np.ndarray, list, tuple], valid_actions: List = None):
-        qvals = self.get_qvals(state)
+        state_tensor = torch.Tensor(state).to(device=self.device)
+        qvals = self.get_qvals(state_tensor)
         if valid_actions is not None:
             invalid_indices = np.where(valid_actions == 0)[0]
             qvals[invalid_indices] = -torch.inf
