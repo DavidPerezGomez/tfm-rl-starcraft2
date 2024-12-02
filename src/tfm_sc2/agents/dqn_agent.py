@@ -7,20 +7,14 @@ from typing import Any, Dict, Iterable, List, Tuple, Union
 
 import numpy as np
 import torch
-import torch_directml
 import torch.nn as nn
-import torch.nn.functional as F
 from pysc2.env.environment import TimeStep
-from pysc2.lib import actions, units
-from typing_extensions import Self
 
 from ..actions import AllActions
-from ..constants import Constants, SC2Costs
 from ..networks.dqn_network import DQNNetwork
 from ..networks.experience_replay_buffer import ExperienceReplayBuffer
 from ..types import AgentStage, DQNAgentParams, Gas, Minerals, RewardMethod, State
 from .base_agent import BaseAgent
-from .stats import AgentStats, AggregatedEpisodeStats, EpisodeStats
 
 
 class DQNAgent(BaseAgent):
@@ -206,6 +200,8 @@ class DQNAgent(BaseAgent):
                         if not self._status_flags["main_net_updated"]:
                             self.logger.info(f"First main network update")
                             self._status_flags["main_net_updated"] = True
+                        else:
+                            self.logger.info(f"Main network update")
                         self._current_episode_stats.losses = self.update_main_network(self._current_episode_stats.losses)
                         main_net_updated = True
                 if self.hyperparams.target_network_sync_frequency > 0:
@@ -213,6 +209,8 @@ class DQNAgent(BaseAgent):
                         if not self._status_flags["target_net_updated"]:
                             self.logger.info(f"First target network update")
                             self._status_flags["target_net_updated"] = True
+                        else:
+                            self.logger.info(f"Target network update")
                         self.synchronize_target_network()
                         target_net_updated = True
                 # HERE

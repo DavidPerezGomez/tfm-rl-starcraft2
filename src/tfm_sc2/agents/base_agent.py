@@ -241,7 +241,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             episode_stats_pd = pd.DataFrame(data=all_episode_stats)
             episode_stats_pd = _add_dummy_action(episode_stats_pd, ["invalid_action_counts", "valid_action_counts"])
             episode_stats_pd.to_parquet(self._checkpoint_path / "episode_stats.parquet")
-            self.logger.info(f"Saved episode stats")
+            self.logger.info(f"Saved episode stats to {self._checkpoint_path}")
         except Exception as error:
             self.logger.error(f"Error saving episode stats")
             self.logger.exception(error)
@@ -253,7 +253,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 agent_stats_pd,
                 ["invalid_action_counts", "valid_action_counts", "invalid_action_counts_per_stage", "valid_action_counts_per_stage"])
             agent_stats_pd.to_parquet(self._checkpoint_path / "agent_stats.parquet")
-            self.logger.info(f"Saved agent stats")
+            self.logger.info(f"Saved agent stats to {self._checkpoint_path}")
         except Exception as error:
             self.logger.error(f"Error saving agent stats")
             self.logger.exception(error)
@@ -265,7 +265,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                 aggregated_stats_pd,
                 ["invalid_action_counts", "valid_action_counts", "invalid_action_counts_per_stage", "valid_action_counts_per_stage"])
             aggregated_stats_pd.to_parquet(self._checkpoint_path / "aggregated_stats.parquet")
-            self.logger.info(f"Saved aggregated stats")
+            self.logger.info(f"Saved aggregated stats to {self._checkpoint_path}")
         except Exception as error:
             self.logger.error(f"Error saving aggregated stats")
             self.logger.exception(error)
@@ -814,6 +814,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_episode_stats.score += score
         self._current_episode_stats.steps += 1
         self.current_agent_stats.step_count += 1
+        a = {RewardMethod.SCORE: ("score", score), RewardMethod.ADJUSTED_REWARD: ("adjusted reward", adjusted_reward), RewardMethod.REWARD: ("reward", reward)}
+        self.logger.debug(f"Previous action {a[self._reward_method][0]}: {a[self._reward_method][1]}")
 
         if obs.first():
             self.setup_actions()

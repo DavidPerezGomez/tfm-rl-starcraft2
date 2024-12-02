@@ -55,9 +55,9 @@ def setup_logging(log_file: str = None):
     if log_file  is not None:
         log_file: Path = Path(log_file)
         log_file.parent.mkdir(exist_ok=True, parents=True)
-    WithLogger.init_logging(stream_level=logging.DEBUG, file_name=log_file)
+    WithLogger.init_logging(stream_level=logging.INFO, file_name=log_file)
     absl_logger = logging.getLogger("absl")
-    absl_logger.setLevel(logging.WARNING)
+    absl_logger.setLevel(logging.INFO)
 
 def load_dqn_agent(cls, map_name, map_config, checkpoint_path: Path, action_masking: bool, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
     MainLogger.get().info(f"Loading agent from file {checkpoint_path}")
@@ -475,16 +475,31 @@ def main(unused_argv):
                         for a in other_agents:
                             a.reset()
                         episode_ended = timesteps[0].last()
+                        total_time_actions, total_time_steps, n_steps = 0, 0, 0
                         while not episode_ended:
+                            step_t0 = time.time()
+
                             step_actions = [a.step(timestep) for a, timestep in zip([agent, *other_agents], timesteps)]
+                            step_t1 = time.time()
                             # step_actions = [agent.step(timesteps[0])]
+
                             timesteps = env.step(step_actions)
+                            step_t2 = time.time()
+
+                            total_time_actions += step_t1 - step_t0
+                            total_time_steps += step_t2 - step_t1
+                            n_steps += 1
+                            logger.info(f"Action calculated in {(step_t1 - step_t0)*1000:-2f}ms")
+                            logger.info(f"Step performed in {(step_t2 - step_t1)*1000:-2f}ms")
+
                             episode_ended = timesteps[0].last()
                             if episode_ended:
                                 finished_episodes += 1
                                 t1 = time.time()
                                 t_delta = t1 - t0
                                 logger.info(f"Episode {finished_episodes}/{FLAGS.num_episodes} completed in {t_delta:.2f} seconds ({t_delta / 60:.2f} minutes)")
+                                logger.info(f"Total time calculating actions: {total_time_actions:.2f}s ({(total_time_actions / n_steps)*1000} ms/step)")
+                                logger.info(f"Total time performing steps: {total_time_steps:.2f}s ({(total_time_steps / n_steps)*1000} ms/step)")
 
                                 # Perform one last step to process rewards etc
                                 last_step_actions = [a.step(timestep) for a, timestep in zip([agent, *other_agents], timesteps)]

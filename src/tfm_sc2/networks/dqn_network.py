@@ -1,15 +1,16 @@
-from abc import ABC, abstractmethod
-from typing import List, Tuple, Union
+from abc import ABC
+from typing import List, Union
 
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch_directml
 from torch import optim
 
+from tfm_sc2.with_logger import WithLogger
 
-class DQNNetwork(nn.Module, ABC):
+
+class DQNNetwork(WithLogger, nn.Module, ABC):
     """Base class for Deep Q-Networks with discrete actions.
 
     This class makes no assumptions over the type of network, and it will
@@ -70,12 +71,14 @@ class DQNNetwork(nn.Module, ABC):
         Returns:
             int: Selected action
         """
+        self.logger.info("Selecting random action.")
         if valid_actions is not None:
             return np.random.choice(np.where(valid_actions == 1)[0])
 
         return np.random.choice(self.actions)
 
     def get_greedy_action(self, state: Union[np.ndarray, list, tuple], valid_actions: List = None):
+        self.logger.info(f"Selecting greedy action with q-vals {qvals}.")
         state_tensor = torch.Tensor(state).to(device=self.device)
         qvals = self.get_qvals(state_tensor)
         if valid_actions is not None:
