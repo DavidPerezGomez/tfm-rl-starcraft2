@@ -291,11 +291,12 @@ def main(unused_argv):
         logger.info(f"Creating new buffer with memory size = {memory_size} and burn-in = {burn_in}")
         buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
 
-    base_args = dict(map_name=map_name, map_config=map_config, reward_method=reward_method)
-    common_args = dict(buffer=buffer, load_agent=load_agent, action_masking=action_masking, checkpoint_path=checkpoint_path, **base_args)
+    base_args = dict(map_name=map_name, map_config=map_config, reward_method=reward_method, action_masking=action_masking)
+    common_args = dict(buffer=buffer, load_agent=load_agent, checkpoint_path=checkpoint_path, **base_args)
     dqn_agent_args = dict(load_networks_only=load_networks_only, **common_args)
     gm_dqn_agent_args = dict(time_displacement=FLAGS.gm_time_displacement, **dqn_agent_args)
-    random_subagent_args = dict(buffer=None, load_agent=False, action_masking=action_masking, **base_args)
+    subagent_args = dict(buffer=None, load_networks_only=False, **base_args)
+    random_subagent_args = dict(buffer=None, load_agent=False, **base_args)
     match FLAGS.agent_key:
         case "single.random":
             log_name = "Main Agent - Random"
@@ -352,13 +353,13 @@ def main(unused_argv):
             # assert arm_agent_file.exists(), f"The agent file for the army recruit manager doesn't exist '{arm_agent_file}'"
             # assert aam_agent_file.exists(), f"The agent file for the attack manager doesn't exist '{arm_agent_file}'"
             logger.info("Loading base manager")
-            base_manager = load_or_create_dqn_agent(BaseManagerDQNAgent, **random_subagent_args, load_agent=bm_agent_file.exists(), checkpoint_path=bm_path, log_name="Sub Agent - Base Manager")
+            base_manager = load_or_create_dqn_agent(BaseManagerDQNAgent, **subagent_args, load_agent=bm_agent_file.exists(), checkpoint_path=bm_path, log_name="Sub Agent - Base Manager")
             base_manager.exploit()
             logger.info("Loading army recruit manager")
-            army_recruit_manager = load_or_create_dqn_agent(ArmyRecruitManagerDQNAgent, **random_subagent_args, load_agent=arm_agent_file.exists(), checkpoint_path=arm_path, log_name="Sub Agent - Army Manager")
+            army_recruit_manager = load_or_create_dqn_agent(ArmyRecruitManagerDQNAgent, **subagent_args, load_agent=arm_agent_file.exists(), checkpoint_path=arm_path, log_name="Sub Agent - Army Manager")
             army_recruit_manager.exploit()
             logger.info("Loading attack manager")
-            army_attack_manager = load_or_create_dqn_agent(ArmyAttackManagerDQNAgent, **random_subagent_args, load_agent=aam_agent_file.exists(), checkpoint_path=aam_path, log_name="Sub Agent - Attack Manager")
+            army_attack_manager = load_or_create_dqn_agent(ArmyAttackManagerDQNAgent, **subagent_args, load_agent=aam_agent_file.exists(), checkpoint_path=aam_path, log_name="Sub Agent - Attack Manager")
             army_attack_manager.exploit()
             extra_agent_args = dict(
                 base_manager=base_manager,
@@ -372,11 +373,11 @@ def main(unused_argv):
             bm_path = checkpoint_path / "base_manager"
             arm_path = checkpoint_path / "army_recruit_manager"
             aam_path = checkpoint_path / "army_attack_manager"
-            base_manager = load_or_create_random_agent(BaseManagerRandomAgent, **common_args, checkpoint_path=bm_path, log_name="SubAgent - Random BaseManager")
+            base_manager = load_or_create_random_agent(BaseManagerRandomAgent, **random_subagent_args, checkpoint_path=bm_path, log_name="SubAgent - Random BaseManager")
             base_manager.logger.setLevel(logging.WARNING)
-            army_recruit_manager = load_or_create_random_agent(ArmyRecruitManagerRandomAgent, **common_args, checkpoint_path=arm_path, log_name="SubAgent - Random ArmyRecruitManager")
+            army_recruit_manager = load_or_create_random_agent(ArmyRecruitManagerRandomAgent, **random_subagent_args, checkpoint_path=arm_path, log_name="SubAgent - Random ArmyRecruitManager")
             army_recruit_manager.logger.setLevel(logging.WARNING)
-            army_attack_manager = load_or_create_random_agent(ArmyAttackManagerRandomAgent, **common_args, checkpoint_path=aam_path, log_name="SubAgent - Random ArmyAttackManager")
+            army_attack_manager = load_or_create_random_agent(ArmyAttackManagerRandomAgent, **random_subagent_args, checkpoint_path=aam_path, log_name="SubAgent - Random ArmyAttackManager")
             army_attack_manager.logger.setLevel(logging.WARNING)
             extra_agent_args = dict(
                 base_manager=base_manager,
