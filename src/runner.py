@@ -294,6 +294,7 @@ def main(unused_argv):
     base_args = dict(map_name=map_name, map_config=map_config, reward_method=reward_method)
     common_args = dict(buffer=buffer, load_agent=load_agent, action_masking=action_masking, checkpoint_path=checkpoint_path, **base_args)
     dqn_agent_args = dict(load_networks_only=load_networks_only, **common_args)
+    gm_dqn_agent_args = dict(time_displacement=FLAGS.gm_time_displacement, **dqn_agent_args)
     subagent_args = dict(buffer=None, load_networks_only=False, **base_args)
     match FLAGS.agent_key:
         case "single.random":
@@ -330,7 +331,7 @@ def main(unused_argv):
                 army_attack_manager=army_attack_manager
             )
             log_name="Main Agent - Random GameManager"
-            agent = load_or_create_random_agent(GameManagerRandomAgent, **common_args, log_name=log_name, **extra_agent_args)
+            agent = load_or_create_random_agent(GameManagerRandomAgent, **common_args, time_displacement=FLAGS.gm_time_displacement, log_name=log_name, **extra_agent_args)
         case "multi.dqn.base_manager":
             log_name="Main Agent - Base Manager"
             agent = load_or_create_dqn_agent(BaseManagerDQNAgent, **dqn_agent_args, log_name=log_name)
@@ -366,7 +367,7 @@ def main(unused_argv):
             )
 
             log_name="Main Agent - Game Manager"
-            agent = load_or_create_dqn_agent(GameManagerDQNAgent, **dqn_agent_args, log_name=log_name, **extra_agent_args)
+            agent = load_or_create_dqn_agent(GameManagerDQNAgent, **gm_dqn_agent_args, log_name=log_name, **extra_agent_args)
         case "multi.dqn.game_manager" if FLAGS.use_random_subagents:
             bm_path = checkpoint_path / "base_manager"
             arm_path = checkpoint_path / "army_recruit_manager"
@@ -384,7 +385,7 @@ def main(unused_argv):
             )
 
             log_name = "Main Agent - Game Manager"
-            agent = load_or_create_dqn_agent(GameManagerDQNAgent, **dqn_agent_args, log_name=log_name, **extra_agent_args)
+            agent = load_or_create_dqn_agent(GameManagerDQNAgent, **gm_dqn_agent_args, log_name=log_name, **extra_agent_args)
             logger.info(f"Using agent {log_name} with parameters: {dqn_agent_args}")
         case _:
             raise RuntimeError(f"Unknown agent key {FLAGS.agent_key}")
@@ -595,6 +596,7 @@ if __name__ == "__main__":
     flags.DEFINE_boolean("exploit", default=False, required=False, help="Use the agent in exploitation mode, not for training.")
     flags.DEFINE_boolean("use_scripted_enemy", default=False, required=False, help="Use a scripted enemy instead of a random one.")
     flags.DEFINE_boolean("use_random_subagents", default=False, required=False, help="Use random sub-agents for the feudal agent.")
+    flags.DEFINE_integer("gm_time_displacement", 5, "Game manager chooses strategy every n steps.", lower_bound=1)
     flags.DEFINE_boolean("reset_epsilon", default=False, required=False, help="Reset epsilon to its default when loading an agent.")
     flags.DEFINE_boolean("save_agent", default=True, required=False, help="Whether to save the agent and/or its stats.")
     flags.DEFINE_boolean("random_mode", default=False, required=False, help="Tell the agent to run in random mode. Used mostly to ensure we collect experiences.")
