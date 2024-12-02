@@ -18,7 +18,8 @@ class GameManagerDQNAgent(GameManagerBaseAgent, DQNAgent):
     def _select_game_manager_action(self, obs: TimeStep) -> GameManagerActions:
         return random.choice(self.agent_actions)
 
-    def select_action(self, obs: TimeStep, valid_actions = None) -> Tuple[AllActions, Dict[str, Any]]:
+    def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any]]:
+        valid_actions = self._available_actions
         if valid_actions is not None:
             valid_actions = self._actions_to_network(valid_actions)
         if (self._random_mode) or (self._train and (self._buffer.burn_in_capacity < 1)):

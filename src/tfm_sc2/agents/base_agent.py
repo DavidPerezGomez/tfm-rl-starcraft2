@@ -791,6 +791,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_state_tuple = self._current_state_tuple
         self._prev_action = self._action_to_idx[original_action]
         self._prev_action_args = original_action_args
+        self._prev_action_is_valid = is_valid_action
 
         # if not self._exploit:
         if obs.last():
