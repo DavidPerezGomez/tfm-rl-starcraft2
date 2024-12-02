@@ -92,17 +92,17 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
 
         action, action_args, is_valid_action, proxy_manager = self.forward_action(obs=obs, action=game_manager_action)
 
-        if action == AllActions.NO_OP:
-            self.logger.debug(f"Proxy manager for action {game_manager_action.name} returned a no-op, selecting a different action...")
-            available_actions = [a for a in available_actions if a != game_manager_action]
-            game_manager_action = self.select_action(obs, valid_actions=available_actions)
-
-            action, action_args, is_valid_action, proxy_manager = self.forward_action(obs=obs, action=game_manager_action)
-            if action == AllActions.NO_OP:
-                self.logger.debug(f"Proxy manager for action {game_manager_action.name} also returned a no-op, selecting the remaining action...")
-                available_actions = [a for a in available_actions if a != game_manager_action]
-                game_manager_action = available_actions[0]
-                action, action_args, is_valid_action, proxy_manager = self.forward_action(obs=obs, action=game_manager_action)
+        # if action == AllActions.NO_OP:
+        #     self.logger.debug(f"Proxy manager for action {game_manager_action.name} returned a no-op, selecting a different action...")
+        #     available_actions = [a for a in self._available_actions if a != game_manager_action]
+        #     game_manager_action = self.select_action(obs, valid_actions=available_actions)
+        #
+        #     action, action_args, is_valid_action, proxy_manager = self.forward_action(obs=obs, action=game_manager_action)
+        #     if action == AllActions.NO_OP:
+        #         self.logger.debug(f"Proxy manager for action {game_manager_action.name} also returned a no-op, selecting the remaining action...")
+        #         available_actions = [a for a in available_actions if a != game_manager_action]
+        #         game_manager_action = available_actions[0]
+        #         action, action_args, is_valid_action, proxy_manager = self.forward_action(obs=obs, action=game_manager_action)
 
         original_action = action
         original_action_args = action_args
