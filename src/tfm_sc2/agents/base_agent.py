@@ -438,19 +438,19 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     action_args = dict(source_unit_tag=worker.tag, target_unit_tag=mineral.tag)
                 case AllActions.RECRUIT_SCV_0:
                     assert self._command_center_0_pos is not None, "There is no position for first command center in the map"
-                    command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_0_pos], first_only=True)
+                    command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_0_pos], completed_only=True, first_only=True)
                     assert command_center is not None, "There is no first command center"
                     assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command center's queue is full"
                     action_args = dict(source_unit_tag=command_center.tag)
                 case AllActions.RECRUIT_SCV_1:
                     assert self._command_center_1_pos is not None, "There is no position for second command center in the map"
-                    command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_1_pos], first_only=True)
+                    command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_1_pos], completed_only=True, first_only=True)
                     assert command_center is not None, "There is no second command center"
                     assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command center's queue is full"
                     action_args = dict(source_unit_tag=command_center.tag)
                 case AllActions.RECRUIT_SCV_2:
                     assert self._command_center_2_pos is not None, "There is no position for third command center in the map"
-                    command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_2_pos], first_only=True)
+                    command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, positions=[self._command_center_2_pos], completed_only=True, first_only=True)
                     assert command_center is not None, "There is no third command center"
                     assert command_center.order_length < Constants.COMMAND_CENTER_QUEUE_LENGTH, "Command center's queue is full"
                     action_args = dict(source_unit_tag=command_center.tag)
@@ -482,7 +482,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     worker, _ = self._get_closest(workers, position)
                     action_args = dict(source_unit_tag=worker.tag, target_position=position)
                 case AllActions.RECRUIT_MARINE:
-                    barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
+                    barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks, completed_only=True)
                     barracks = [cc for cc in barracks if cc.order_length < Constants.BARRACKS_QUEUE_LENGTH]
                     assert len(barracks) > 0, "There are no barracks available"
                     barracks = sorted(barracks, key=lambda b: b.order_length)
@@ -952,13 +952,13 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         cc1_can_exist = self._command_center_1_pos is not None
         cc2_can_exist = self._command_center_2_pos is not None
         command_center_0 = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter,
-                                         positions=[self._command_center_0_pos], first_only=True)
+                                         positions=[self._command_center_0_pos], completed_only=True, first_only=True)
         cc0_queue_is_full = command_center_0.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH if command_center_0 is not None else True
         command_center_1 = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter,
-                                         positions=[self._command_center_1_pos], first_only=True)
+                                         positions=[self._command_center_1_pos], completed_only=True, first_only=True)
         cc1_queue_is_full = command_center_1.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH if command_center_1 is not None else True
         command_center_2 = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter,
-                                         positions=[self._command_center_2_pos], first_only=True)
+                                         positions=[self._command_center_2_pos], completed_only=True, first_only=True)
         cc2_queue_is_full = command_center_2.order_length >= Constants.COMMAND_CENTER_QUEUE_LENGTH if command_center_2 is not None else True
 
         completed_supply_depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot, completed_only=True)
