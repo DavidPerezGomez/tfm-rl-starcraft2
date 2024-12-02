@@ -11,9 +11,10 @@ RAW_FUNCTIONS = actions.RAW_FUNCTIONS
 
 class WithRandomActionSelection:
     def select_action(self, obs: TimeStep, available_actions = None) -> Tuple[AllActions, Dict[str, Any]]:
-        # available_actions = self.available_actions(obs)
-        # action = random.choice(available_actions)
-        available_actions = available_actions or [a for a in self.agent_actions if a in self._map_config["available_actions"]]
+        if self._action_masking:
+            available_actions = self._available_actions
+        else:
+            available_actions = [a for a in self.agent_actions if a in self._map_config["available_actions"]]
 
         action = random.choice(available_actions)
         action_args, is_valid_action = self._get_action_args(obs=obs, action=action)

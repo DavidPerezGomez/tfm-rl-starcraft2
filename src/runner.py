@@ -261,11 +261,11 @@ def main(unused_argv):
                 # if FLAGS.agent_key.startswith("single"):
                 if not FLAGS.use_scripted_enemy:
                     logger.info(f"Adding random single agent as opponent #{len(other_agents) + 1}#")
-                    enemy_agent = SingleRandomAgent(map_name=map_name, map_config=map_config, log_name=f"Random Agent {len(other_agents) + 1}", log_level=logging.ERROR, reward_method=reward_method)
+                    enemy_agent = SingleRandomAgent(map_name=map_name, map_config=map_config, log_name=f"Random Agent {len(other_agents) + 1}", log_level=logging.ERROR, reward_method=reward_method, action_masking=action_masking)
                     enemy_agent.logger.setLevel(logging.WARNING)
                 else:
                     logger.info(f"Adding scripted single agent as opponent #{len(other_agents) + 1}#")
-                    enemy_agent = SingleScriptedAgent(map_name=map_name, map_config=map_config, log_name=f"Scripted Agent {len(other_agents) + 1}", log_level=logging.ERROR, reward_method=reward_method)
+                    enemy_agent = SingleScriptedAgent(map_name=map_name, map_config=map_config, log_name=f"Scripted Agent {len(other_agents) + 1}", log_level=logging.ERROR, reward_method=reward_method, action_masking=action_masking)
                     enemy_agent.logger.setLevel(logging.WARNING)
                 other_agents.append(enemy_agent)
                 # elif FLAGS.agent_key.startswith("multi"):
