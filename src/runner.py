@@ -461,7 +461,6 @@ def main(unused_argv):
 
         num_wins = 0
         num_wins_enemy = 0
-        num_games = 0
         logger.info("Beginning agent training")
         while current_episode_failures < max_episode_failures:
             try:
@@ -513,9 +512,11 @@ def main(unused_argv):
                                 # Perform one last step to process rewards etc
                                 last_step_actions = [a.step(timestep) for a, timestep in zip([agent, *other_agents], timesteps)]
 
-                                for idx, a in enumerate(other_agents):
-                                    logger.info(f"Total reward for enemy agent {idx + 1}: {a.reward}")
-                                    win_rate = 100 * (finished_episodes - a.reward) / finished_episodes
+                                if other_agents:
+                                    if timesteps[0].reward > 0:
+                                        num_wins += 1
+                                    logger.info(f"Total reward for main agent: {agent.reward}")
+                                    win_rate = 100 * num_wins / finished_episodes
                                     logger.info(f"Win rate for main agent: {win_rate:.2f}%")
 
                         current_episode_failures = 0
