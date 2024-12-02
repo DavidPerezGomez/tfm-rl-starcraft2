@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import List
 
 from pysc2.env.environment import TimeStep
@@ -18,9 +18,9 @@ from .with_game_manager_actions import WithGameManagerActions
 
 class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
 
-    def __init__(self, base_manager: WithBaseManagerActions,
-                 army_recruit_manager: WithArmyRecruitManagerActions,
-                 army_attack_manager: WithArmyAttackManagerActions,
+    def __init__(self, base_manager: (BaseAgent, WithBaseManagerActions),
+                 army_recruit_manager: (BaseAgent, WithArmyRecruitManagerActions),
+                 army_attack_manager: (BaseAgent, WithArmyAttackManagerActions),
                  time_displacement: int = 5, **kwargs):
         super().__init__(**kwargs)
         self._base_manager = base_manager
@@ -55,40 +55,46 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
     def calculate_available_actions(self, obs: TimeStep) -> List[AllActions]:
         return self.agent_actions
 
+    @override
+    @abstractmethod
+    def select_action(self, obs: TimeStep) -> GameManagerActions:
+        pass
+
     def pre_step(self, obs: TimeStep):
         super().pre_step(obs)
         self._base_manager.pre_step(obs)
         self._army_recruit_manager.pre_step(obs)
         self._army_attack_manager.pre_step(obs)
 
-    def step(self, obs: TimeStep):
+    def step(self, obs: TimeStep, **kwargs):
         if obs.first():
-            self._setup_positions(obs)
-            self._base_manager._setup_positions(obs)
-            self._army_recruit_manager._setup_positions(obs)
-            self._army_attack_manager._setup_positions(obs)
+            self.setup_positions()
+            self._base_manager.setup_positions()
+            self._army_recruit_manager.setup_positions()
+            self._army_attack_manager.setup_positions()
 
         self.pre_step(obs)
 
         super().step(obs, only_super_step=True)
 
-        self.update_supply_depot_positions(obs)
-        self._base_manager.update_supply_depot_positions(obs)
-        self._army_recruit_manager.update_supply_depot_positions(obs)
-        self._army_attack_manager.update_supply_depot_positions(obs)
+        self.update_supply_depot_positions()
+        self._base_manager.update_supply_depot_positions()
+        self._army_recruit_manager.update_supply_depot_positions()
+        self._army_attack_manager.update_supply_depot_positions()
 
-        self.update_command_center_positions(obs)
-        self._base_manager.update_supply_depot_positions(obs)
-        self._army_recruit_manager.update_supply_depot_positions(obs)
-        self._army_attack_manager.update_supply_depot_positions(obs)
+        self.update_command_center_positions()
+        self._base_manager.update_supply_depot_positions()
+        self._army_recruit_manager.update_supply_depot_positions()
+        self._army_attack_manager.update_supply_depot_positions()
 
-        self.update_barracks_positions(obs)
-        self._base_manager.update_barracks_positions(obs)
-        self._army_recruit_manager.update_barracks_positions(obs)
-        self._army_attack_manager.update_barracks_positions(obs)
+        self.update_barracks_positions()
+        self._base_manager.update_barracks_positions()
+        self._army_recruit_manager.update_barracks_positions()
+        self._army_attack_manager.update_barracks_positions()
 
         self._available_actions = self.calculate_available_actions(obs)
         game_manager_action = self.select_action(obs)
+        self.select_proxy_agent(game_manager_action)
 
         action, action_args, is_valid_action, proxy_manager = self.forward_action(obs=obs, action=game_manager_action)
 

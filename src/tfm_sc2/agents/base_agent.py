@@ -377,7 +377,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def is_training(self):
         return self._train
 
-    def _setup_positions(self, obs: TimeStep):
+    def setup_positions(self):
         if self._map_name == "Simple64":
             command_center = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, first_only=True)
             position = "top_left" if command_center.y < 50 else "bottom_right"
@@ -870,7 +870,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_obs_unit_info = self._gather_obs_info(obs)
 
         if obs.first():
-            self._setup_positions(obs)
+            self.setup_positions()
         self.pre_step(obs)
 
         super().step(obs)
