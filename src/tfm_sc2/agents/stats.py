@@ -4,7 +4,7 @@ from typing import Dict, List
 import numpy as np
 
 from ..actions import AllActions
-from ..types import AgentStage, RewardMethod
+from ..types import AgentStage, RewardMode
 
 
 @dataclass
@@ -134,12 +134,12 @@ class AggregatedEpisodeStats:
     def mean_emissions_last_n_episodes(self, n: int = 10) -> float:
         return np.mean(self.emissions[-n:])
 
-    def mean_rewards(self, stage: str = None, last_n: int = None, reward_method: RewardMethod = RewardMethod.REWARD) -> float:
-        if reward_method == RewardMethod.REWARD:
+    def mean_rewards(self, stage: str = None, last_n: int = None, reward_mode: RewardMode = RewardMode.REWARD) -> float:
+        if reward_mode == RewardMode.REWARD:
             rewards_source = self.rewards if stage is None else self.rewards_per_stage[stage]
-        elif reward_method == RewardMethod.ADJUSTED_REWARD:
+        elif reward_mode == RewardMode.ADJUSTED_REWARD:
             rewards_source = self.adjusted_rewards if stage is None else self.adjusted_rewards_per_stage[stage]
-        elif reward_method == RewardMethod.SCORE:
+        elif reward_mode == RewardMode.SCORE:
             rewards_source = self.scores if stage is None else self.scores_per_stage[stage]
 
         if last_n is None:

@@ -46,7 +46,6 @@ class DQNNetwork(WithLogger, nn.Module, ABC):
         self.optimizer = optimizer
         self.scheduler = scheduler
 
-
     def _get_model_layers_from_number_of_units(self, layer_units: List[int], num_inputs: int, num_outputs: int):
         layer_units = layer_units or self.DEFAULT_LAYER_UNITS
         model_layers = []

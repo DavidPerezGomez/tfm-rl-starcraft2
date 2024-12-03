@@ -13,7 +13,7 @@ from pysc2.env.environment import TimeStep
 from ..actions import AllActions
 from ..networks.dqn_network import DQNNetwork
 from ..networks.experience_replay_buffer import ExperienceReplayBuffer
-from ..types import AgentStage, DQNAgentParams, Gas, Minerals, RewardMethod, State
+from ..types import AgentStage, DQNAgentParams, RewardMode
 from .base_agent import BaseAgent
 
 
@@ -256,15 +256,15 @@ class DQNAgent(BaseAgent):
         states, actions, action_args, rewards, adjusted_rewards, scores, dones, next_states, next_state_available_actions = [i for i in batch]
         states = torch.stack([torch.Tensor(state) for state in states]).to(device=self.device)
         next_states = torch.stack([torch.Tensor(state) for state in next_states]).to(device=self.device)
-        match self._reward_method:
-            case RewardMethod.SCORE:
+        match self._reward_mode:
+            case RewardMode.SCORE:
                 rewards_to_use = scores
-            case RewardMethod.ADJUSTED_REWARD:
+            case RewardMode.ADJUSTED_REWARD:
                 rewards_to_use = adjusted_rewards
-            case RewardMethod.REWARD:
+            case RewardMode.REWARD:
                 rewards_to_use = rewards
             case _:
-                self.logger.warning(f"Unknown reward method {self._reward_method.name} - using default rewards")
+                self.logger.warning(f"Unknown reward method {self._reward_mode.name} - using default rewards")
                 rewards_to_use = rewards
         rewards_vals = torch.FloatTensor(rewards_to_use).to(device=self.device)
         actions_vals = torch.LongTensor(np.array(actions)).to(device=self.device).reshape(-1,1)

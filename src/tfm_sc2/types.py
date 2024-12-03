@@ -64,10 +64,22 @@ class ScvState(IntEnum):
     MOVING = 4
     ATTACKING = 5
 
-class RewardMethod(IntEnum):
+class RewardMode(IntEnum):
     REWARD = 0
     SCORE = 1
     ADJUSTED_REWARD = 2
+
+    @staticmethod
+    def from_name(reward_mode_str):
+        match reward_mode_str.lower():
+            case "score":
+                return RewardMode.SCORE
+            case "adjusted_reward":
+                return RewardMode.ADJUSTED_REWARD
+            case "reward":
+                return RewardMode.REWARD
+            case _:
+                return None
 
 class AgentStage(Enum):
     BURN_IN = "burn-in"

@@ -16,7 +16,7 @@ from tfm_sc2.actions import (
     BaseManagerActions,
     GameManagerActions,
 )
-from tfm_sc2.agents.dqn_agent import DQNAgentParams, State
+from tfm_sc2.types import DQNAgentParams, State
 from tfm_sc2.agents.multi.army_attack_manager_dqn_agent import ArmyAttackManagerDQNAgent
 from tfm_sc2.agents.multi.army_attack_manager_random_agent import (
     ArmyAttackManagerRandomAgent,
@@ -37,9 +37,8 @@ from tfm_sc2.agents.single.single_scripted_agent import SingleScriptedAgent
 from tfm_sc2.networks.dqn_network import DQNNetwork
 from tfm_sc2.networks.experience_replay_buffer import ExperienceReplayBuffer
 from tfm_sc2.sc2_config import MAP_CONFIGS, SC2_CONFIG
-from tfm_sc2.types import RewardMethod
+from tfm_sc2.types import RewardMode
 from tfm_sc2.with_logger import WithLogger
-from torch import optim
 
 FLAGS = flags.FLAGS
 
@@ -114,7 +113,7 @@ def create_dqn(cls = None):
 
     return dqn
 
-def create_dqn_agent(cls, map_name, map_config, main_network: DQNNetwork, checkpoint_path: Path, log_name: str, action_masking: bool, reward_method: RewardMethod, memory_size: int = 100000, burn_in: int = 10000, target_network: DQNNetwork = None, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
+def create_dqn_agent(cls, map_name, map_config, main_network: DQNNetwork, checkpoint_path: Path, log_name: str, action_masking: bool, reward_mode: RewardMode, memory_size: int = 100000, burn_in: int = 10000, target_network: DQNNetwork = None, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
     if buffer is None:
         buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
 
@@ -122,22 +121,25 @@ def create_dqn_agent(cls, map_name, map_config, main_network: DQNNetwork, checkp
     agent_params = DQNAgentParams(epsilon=FLAGS.epsilon, epsilon_decay=FLAGS.epsilon_decay, min_epsilon=FLAGS.min_epsilon, batch_size=FLAGS.batch_size, gamma=FLAGS.gamma, main_network_update_frequency=FLAGS.main_network_update_frequency, target_network_sync_frequency=FLAGS.target_network_sync_frequency, target_sync_mode=FLAGS.target_sync_mode, update_tau=FLAGS.update_tau)
     # agent_params = DQNAgentParams(epsilon=0.9, epsilon_decay=FLAGS.epsilon_decay, min_epsilon=0.01, batch_size=512, gamma=0.99, main_network_update_frequency=50, target_network_sync_frequency=-1, target_sync_mode="soft", update_tau=0.1)
     # agent_params = DQNAgentParams(epsilon=0.9, epsilon_decay=0.99, min_epsilon=0.01, batch_size=512, gamma=0.99, main_network_update_frequency=-1, target_network_sync_frequency=-1, target_sync_mode="soft", update_tau=0.5)
-    agent = cls(map_name=map_name, map_config=map_config, main_network=main_network, target_network=target_network, buffer=buffer, hyperparams=agent_params, checkpoint_path=checkpoint_path, log_name=log_name, reward_method=reward_method, action_masking=action_masking, **extra_agent_args)
+    agent = cls(map_name=map_name, map_config=map_config, main_network=main_network, target_network=target_network, buffer=buffer, hyperparams=agent_params, checkpoint_path=checkpoint_path, log_name=log_name, reward_mode=reward_mode, action_masking=action_masking, **extra_agent_args)
 
     return agent
 
-def load_or_create_dqn_agent(cls, map_name, map_config, load_agent: bool, checkpoint_path: Path, action_masking: bool, log_name: str, load_networks_only: bool, reward_method: RewardMethod, memory_size: int = 100000, burn_in: int = 10000, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
     if load_networks_only:
+def load_or_create_dqn_agent(cls, map_name, map_config, load_agent: bool, checkpoint_path: Path, action_masking: bool, log_name: str, load_networks_only: bool, reward_mode: RewardMode, memory_size: int = 100000, burn_in: int = 10000, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
         if buffer is None:
             buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
         main_network = load_dqn(checkpoint_path / SingleDQNAgent._MAIN_NETWORK_FILE)
         target_network = load_dqn(checkpoint_path / SingleDQNAgent._TARGET_NETWORK_FILE)
-        agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, main_network=main_network, target_network=target_network, buffer=buffer, log_name=log_name, action_masking=action_masking, reward_method=reward_method, **extra_agent_args)
     elif not load_agent:
         main_network = create_dqn(cls)
         if buffer is None:
             buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-        agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, main_network=main_network, buffer=buffer, log_name=log_name, action_masking=action_masking, reward_method=reward_method, **extra_agent_args)
+        agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, main_network=main_network, buffer=buffer, log_name=log_name, action_masking=action_masking, reward_mode=reward_mode, **extra_agent_args)
+            agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path,
+                                     main_network=main_network, target_network=target_network, buffer=buffer,
+                                     log_name=log_name, action_masking=action_masking, reward_mode=reward_mode,
+                                     **extra_agent_args)
     else:
         # HEre we allow buffer to be None. In that case, the agent's buffer is loaded, otherwise it will be replaced
         agent = load_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, action_masking=action_masking, buffer=buffer,  **extra_agent_args)
@@ -152,15 +154,15 @@ def load_random_agent(cls, map_name, map_config, checkpoint_path: Path, buffer: 
 
     return agent
 
-def create_random_agent(cls, map_name, map_config, checkpoint_path: Path, log_name: str, reward_method: RewardMethod, memory_size: int = 100000, burn_in: int = 10000, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
+def create_random_agent(cls, map_name, map_config, checkpoint_path: Path, log_name: str, reward_mode: RewardMode, memory_size: int = 100000, burn_in: int = 10000, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
     if buffer is None:
         buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-    agent = cls(map_name=map_name, map_config=map_config, log_name=log_name, buffer=buffer, checkpoint_path=checkpoint_path, reward_method=reward_method, **extra_agent_args)
+    agent = cls(map_name=map_name, map_config=map_config, log_name=log_name, buffer=buffer, checkpoint_path=checkpoint_path, reward_mode=reward_mode, **extra_agent_args)
 
     return agent
 
 
-def load_or_create_random_agent(cls, map_name, map_config, load_agent: bool, checkpoint_path: Path, log_name: str, reward_method: RewardMethod, memory_size: int = 100000, burn_in: int = 10000, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
+def load_or_create_random_agent(cls, map_name, map_config, load_agent: bool, checkpoint_path: Path, log_name: str, reward_mode: RewardMode, memory_size: int = 100000, burn_in: int = 10000, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
     if load_agent:
         agent = load_random_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, buffer=buffer,  **extra_agent_args)
     else:
@@ -215,18 +217,25 @@ def main(unused_argv):
     action_masking = FLAGS.action_masking
     # We will still save the stats when exploiting, but in a subfolder
 
-    reward_method_str = FLAGS.reward_method
+    reward_mode = RewardMode.from_name(FLAGS.reward_mode)
+    if reward_mode is None:
+        logger.warning(f"Unknown reward_mode flag {FLAGS.reward_mode}, falling back to REWARD")
+        reward_mode = RewardMode.REWARD
 
-    match reward_method_str:
-        case "score":
-            reward_method = RewardMethod.SCORE
-        case "adjusted_reward":
-            reward_method = RewardMethod.ADJUSTED_REWARD
-        case "reward":
-            reward_method = RewardMethod.REWARD
-        case _:
-            logger.warning(f"Unknown reward_method flag {reward_method_str}, falling back to REWARD")
-            reward_method = RewardMethod.REWARD
+    base_subagent_reward_mode = RewardMode.from_name(FLAGS.base_subagent_reward_mode)
+    if base_subagent_reward_mode is None:
+        logger.warning(f"Unknown reward_mode flag {FLAGS.base_subagent_reward_mode}, falling back to REWARD")
+        base_subagent_reward_mode = RewardMode.REWARD
+
+    recruit_subagent_reward_mode = RewardMode.from_name(FLAGS.recruit_subagent_reward_mode)
+    if recruit_subagent_reward_mode is None:
+        logger.warning(f"Unknown reward_mode flag {FLAGS.recruit_subagent_reward_mode}, falling back to REWARD")
+        recruit_subagent_reward_mode = RewardMode.REWARD
+
+    attack_subagent_reward_mode = RewardMode.from_name(FLAGS.attack_subagent_reward_mode)
+    if attack_subagent_reward_mode is None:
+        logger.warning(f"Unknown reward_mode flag {FLAGS.attack_subagent_reward_mode}, falling back to REWARD")
+        attack_subagent_reward_mode = RewardMode.REWARD
 
     logger.info(f"Map name: {map_name}")
     logger.info(f"Map available actions: {map_config['available_actions']}")
@@ -238,13 +247,13 @@ def main(unused_argv):
 
     def _create_random_enemy_gm():
         bm_buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-        base_manager = create_random_agent(cls=BaseManagerRandomAgent, map_name=map_name, map_config=map_config, checkpoint_path=None, buffer=bm_buffer, log_name=f"Enemy SubAgent {len(other_agents) + 1} - BaseManager", reward_method=reward_method)
+        base_manager = create_random_agent(cls=BaseManagerRandomAgent, map_name=map_name, map_config=map_config, checkpoint_path=None, buffer=bm_buffer, log_name=f"Enemy SubAgent {len(other_agents) + 1} - BaseManager", reward_mode=reward_mode)
         base_manager.logger.setLevel(logging.WARNING)
         arm_buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-        army_recruit_manager = create_random_agent(cls=ArmyRecruitManagerRandomAgent, map_name=map_name, map_config=map_config, checkpoint_path=None, buffer=arm_buffer, log_name=f"Enemy SubAgent {len(other_agents) + 1} - ArmyRecruitManager", reward_method=reward_method)
+        army_recruit_manager = create_random_agent(cls=ArmyRecruitManagerRandomAgent, map_name=map_name, map_config=map_config, checkpoint_path=None, buffer=arm_buffer, log_name=f"Enemy SubAgent {len(other_agents) + 1} - ArmyRecruitManager", reward_mode=reward_mode)
         army_recruit_manager.logger.setLevel(logging.WARNING)
         aam_buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-        army_attack_manager = create_random_agent(cls=ArmyAttackManagerRandomAgent, map_name=map_name, map_config=map_config, checkpoint_path=None, buffer=aam_buffer, log_name=f"Enemy SubAgent {len(other_agents) + 1} - ArmyAttackManager", reward_method=reward_method)
+        army_attack_manager = create_random_agent(cls=ArmyAttackManagerRandomAgent, map_name=map_name, map_config=map_config, checkpoint_path=None, buffer=aam_buffer, log_name=f"Enemy SubAgent {len(other_agents) + 1} - ArmyAttackManager", reward_mode=reward_mode)
         army_attack_manager.logger.setLevel(logging.WARNING)
         extra_agent_args = dict(
             base_manager=base_manager,
@@ -252,7 +261,7 @@ def main(unused_argv):
             army_attack_manager=army_attack_manager
         )
         gm_buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-        game_manager = create_random_agent(cls=GameManagerRandomAgent, map_name=map_name, map_config=map_config, checkpoint_path=None, buffer=gm_buffer, log_name=f"Enemy {len(other_agents) + 1} - GameManager", reward_method=reward_method, **extra_agent_args)
+        game_manager = create_random_agent(cls=GameManagerRandomAgent, map_name=map_name, map_config=map_config, checkpoint_path=None, buffer=gm_buffer, log_name=f"Enemy {len(other_agents) + 1} - GameManager", reward_mode=reward_mode, **extra_agent_args)
         game_manager.logger.setLevel(logging.WARNING)
         return game_manager
 
@@ -262,11 +271,11 @@ def main(unused_argv):
                 # if FLAGS.agent_key.startswith("single"):
                 if not FLAGS.use_scripted_enemy:
                     logger.info(f"Adding random single agent as opponent #{len(other_agents) + 1}#")
-                    enemy_agent = SingleRandomAgent(map_name=map_name, map_config=map_config, log_name=f"Random Agent {len(other_agents) + 1}", log_level=logging.ERROR, reward_method=reward_method, action_masking=action_masking)
+                    enemy_agent = SingleRandomAgent(map_name=map_name, map_config=map_config, log_name=f"Random Agent {len(other_agents) + 1}", log_level=logging.ERROR, reward_mode=reward_mode, action_masking=action_masking)
                     enemy_agent.logger.setLevel(logging.WARNING)
                 else:
                     logger.info(f"Adding scripted single agent as opponent #{len(other_agents) + 1}#")
-                    enemy_agent = SingleScriptedAgent(map_name=map_name, map_config=map_config, log_name=f"Scripted Agent {len(other_agents) + 1}", log_level=logging.ERROR, reward_method=reward_method, action_masking=action_masking)
+                    enemy_agent = SingleScriptedAgent(map_name=map_name, map_config=map_config, log_name=f"Scripted Agent {len(other_agents) + 1}", log_level=logging.ERROR, reward_mode=reward_mode, action_masking=action_masking)
                     enemy_agent.logger.setLevel(logging.WARNING)
                 other_agents.append(enemy_agent)
                 # elif FLAGS.agent_key.startswith("multi"):
@@ -274,7 +283,7 @@ def main(unused_argv):
                 #     other_agents.append(_create_random_enemy_gm())
     elif (len(map_config["players"]) > 1):
         logger.info("Loading SingleRandom agent as enemy")
-        enemy_agent = load_or_create_dqn_agent(SingleDQNAgent, checkpoint_path=FLAGS.agent2_path, load_agent=True, map_name=map_name, map_config=map_config, reward_method=reward_method, log_name="Enemy Agent - SingleDQN", load_networks_only=False, action_masking=action_masking)
+        enemy_agent = load_or_create_dqn_agent(SingleDQNAgent, checkpoint_path=FLAGS.agent2_path, load_agent=True, map_name=map_name, map_config=map_config, reward_mode=reward_mode, log_name="Enemy Agent - SingleDQN", load_networks_only=False, action_masking=action_masking)
         enemy_agent.exploit()
         other_agents.append(enemy_agent)
 
@@ -291,8 +300,8 @@ def main(unused_argv):
         logger.info(f"Creating new buffer with memory size = {memory_size} and burn-in = {burn_in}")
         buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
 
-    base_args = dict(map_name=map_name, map_config=map_config, reward_method=reward_method, action_masking=action_masking)
-    common_args = dict(buffer=buffer, load_agent=load_agent, checkpoint_path=checkpoint_path, **base_args)
+    base_args = dict(map_name=map_name, map_config=map_config, action_masking=action_masking)
+    common_args = dict(buffer=buffer, load_agent=load_agent, checkpoint_path=checkpoint_path, reward_mode=reward_mode, score_method=FLAGS.score_method, **base_args)
     dqn_agent_args = dict(load_networks_only=load_networks_only, **common_args)
     gm_dqn_agent_args = dict(time_displacement=FLAGS.gm_time_displacement, **dqn_agent_args)
     subagent_args = dict(buffer=None, load_networks_only=False, **base_args)
@@ -571,7 +580,15 @@ if __name__ == "__main__":
 
     flags.DEFINE_enum("agent_key", "single.random", agent_keys, "Agent to use.")
     flags.DEFINE_enum("map_name", "Simple64", map_keys, "Map to use.")
-    flags.DEFINE_enum("reward_method", default="reward", required=False, enum_values=["reward", "adjusted_reward", "score"], help="What to use to calculate rewards: reward = observation reward, adjusted_reward = observation reward with penalties for step, no-ops and invalid actions, or score deltas (i.e. score increase / decrease + penalty for invalid actions and no-ops).")
+    flags.DEFINE_enum("reward_mode", default="reward", required=False, enum_values=["reward", "adjusted_reward", "score"], help="What to use to calculate rewards: reward = observation reward, adjusted_reward = observation reward with penalties for step, no-ops and invalid actions, or score deltas (i.e. score increase / decrease + penalty for invalid actions and no-ops).")
+    flags.DEFINE_string("score_method", default=None, required=False, help="Name of the method to calculate the score.")
+    flags.DEFINE_boolean("fine_tune", default=False, required=False, help="Perform fine-tuning of sub-agents during training of game manager.")
+    flags.DEFINE_enum("base_subagent_reward_mode", default="reward", required=False, enum_values=["reward", "adjusted_reward", "score"], help="")
+    flags.DEFINE_string("base_subagent_score_method", default=None, required=False, help="")
+    flags.DEFINE_enum("recruit_subagent_reward_mode", default="reward", required=False, enum_values=["reward", "adjusted_reward", "score"], help="")
+    flags.DEFINE_string("recruit_subagent_score_method", default=None, required=False, help="")
+    flags.DEFINE_enum("attack_subagent_reward_mode", default="reward", required=False, enum_values=["reward", "adjusted_reward", "score"], help="")
+    flags.DEFINE_string("attack_subagent_score_method", default=None, required=False, help="")
     flags.DEFINE_enum("dqn_size", "large", ["extra_small", "small", "medium", "large", "extra_large"], "Map to use.", required=False)
     flags.DEFINE_integer("num_episodes", 1, "Number of episodes to play.", lower_bound=1)
 

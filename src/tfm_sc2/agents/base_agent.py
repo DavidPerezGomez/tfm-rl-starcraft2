@@ -21,7 +21,7 @@ from typing_extensions import Self, deprecated
 from ..actions import AllActions
 from ..constants import Constants, SC2Costs
 from ..networks.experience_replay_buffer import ExperienceReplayBuffer
-from ..types import AgentStage, Minerals, Position, RewardMethod, State
+from ..types import AgentStage, Minerals, Position, RewardMode, State
 from ..with_logger import WithLogger
 from .stats import AgentStats, AggregatedEpisodeStats, EpisodeStats
 
@@ -52,7 +52,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def __init__(self,
                  map_name: str, map_config: Dict, buffer: ExperienceReplayBuffer = None,
                  train: bool = True, action_masking: bool = False, checkpoint_path: Union[str|Path] = None, tracker_update_freq_seconds: int = 10,
-                 reward_method: RewardMethod = RewardMethod.REWARD, **kwargs):
+                 reward_mode: RewardMode = RewardMode.REWARD, score_method: str = "get_reward_as_score",
+                 **kwargs):
         super().__init__(**kwargs)
         if torch.cuda.is_available():
             self.device = 'cuda'
@@ -85,7 +86,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_score = 0.
         self._current_reward = 0.
         self._current_adjusted_reward = 0.
-        self._reward_method = reward_method
+        self._reward_mode = reward_mode
+        self._score_method = score_method
         self._buffer = buffer
         self._available_actions = None
         self._current_state_tuple = None
@@ -292,7 +294,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self.steps = agent_attrs["steps"]
         self.obs_spec = agent_attrs["obs_spec"]
         self.action_spec = agent_attrs["action_spec"]
-        self._reward_method = agent_attrs.get("reward_method", RewardMethod.REWARD)
+        self._reward_mode = agent_attrs.get("reward_mode", agent_attrs.get("reward_method", RewardMode.REWARD))
+        self._score_method = agent_attrs.get("score_method", "get_reward_as_score")
         # From WithLogger
         self._log_name = agent_attrs["log_name"]
         if self.logger.name != self._log_name:
@@ -316,7 +319,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             steps=self.steps,
             obs_spec=self.obs_spec,
             action_spec=self.action_spec,
-            reward_method=self._reward_method,
+            reward_mode=self._reward_mode,
             # From logger
             log_name=self._log_name,
         )
@@ -628,7 +631,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def get_reward_and_score(self, obs: TimeStep) -> Tuple[float, float, float]:
         reward = obs.reward
 
-        get_score = getattr(self, self._map_config["get_score_method"])
+        get_score = getattr(self, self._score_method)
         score = get_score(obs)
         adjusted_reward = reward + Constants.STEP_REWARD
 
@@ -779,8 +782,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_episode_stats.score += score
         self._current_episode_stats.steps += 1
         self.current_agent_stats.step_count += 1
-        a = {RewardMethod.SCORE: ("score", score), RewardMethod.ADJUSTED_REWARD: ("adjusted reward", adjusted_reward), RewardMethod.REWARD: ("reward", reward)}
-        self.logger.debug(f"Previous action {a[self._reward_method][0]}: {a[self._reward_method][1]}")
+            a = {RewardMode.SCORE: ("score", score), RewardMode.ADJUSTED_REWARD: ("adjusted reward", adjusted_reward), RewardMode.REWARD: ("reward", reward)}
+            self.logger.debug(f"Previous action {a[self._reward_mode][0]}: {a[self._reward_mode][1]}")
 
         if obs.first():
             self.setup_actions()
@@ -807,7 +810,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self._current_episode_stats.final_stage = self._current_agent_stage().name
             self._tracker_last_update = time.time()
             episode_stage = self._current_episode_stats.initial_stage
-            mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_method=self._reward_method, last_n=5)
+            mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_mode=self._reward_mode, last_n=5)
             max_mean_rewards = self._best_mean_rewards
             max_mean_rewards_str = f"{max_mean_rewards:.2f}" if max_mean_rewards is not None else "None"
             new_max_mean_rewards = (max_mean_rewards is None) or (mean_rewards >= max_mean_rewards)
@@ -842,16 +845,16 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         num_valid = sum(self._current_episode_stats.valid_action_counts.values())
         pct_invalid = num_invalid / (num_invalid + num_valid)
         episode_stage = self._current_episode_stats.initial_stage
-        mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_method=RewardMethod.REWARD)
-        mean_rewards_10 = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, last_n=10, reward_method=RewardMethod.REWARD)
-        mean_adjusted_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_method=RewardMethod.ADJUSTED_REWARD)
-        mean_adjusted_rewards_10 = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, last_n=10, reward_method=RewardMethod.ADJUSTED_REWARD)
-        mean_scores = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_method=RewardMethod.SCORE)
-        mean_scores_10 = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, last_n=10, reward_method=RewardMethod.SCORE)
+        mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_mode=RewardMode.REWARD)
+        mean_rewards_10 = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, last_n=10, reward_mode=RewardMode.REWARD)
+        mean_adjusted_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_mode=RewardMode.ADJUSTED_REWARD)
+        mean_adjusted_rewards_10 = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, last_n=10, reward_mode=RewardMode.ADJUSTED_REWARD)
+        mean_scores = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_mode=RewardMode.SCORE)
+        mean_scores_10 = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, last_n=10, reward_mode=RewardMode.SCORE)
         episode_count = self.current_agent_stats.episode_count_per_stage[episode_stage]
         return [
             f"Episode {self._map_name} // Stage: {episode_stage} // Final stage: {self._current_agent_stage().name}",
-            f"Reward method: {self._reward_method.name}",
+            f"Reward method: {self._reward_mode.name}",
             f"Reward: {self._current_episode_stats.reward} // Adj. Reward: {self._current_episode_stats.adjusted_reward} // Score: {self._current_episode_stats.score}",
             f"Episode {episode_count}",
             f"Mean Rewards for stage ({episode_count} ep) {mean_rewards:.2f} / (10ep) {mean_rewards_10:.2f}",
