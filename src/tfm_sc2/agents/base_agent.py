@@ -20,7 +20,6 @@ from typing_extensions import Self, deprecated
 
 from ..actions import AllActions
 from ..constants import Constants, SC2Costs
-from ..networks.experience_replay_buffer import ExperienceReplayBuffer
 from ..types import AgentStage, Minerals, Position, RewardMode, State
 from ..with_logger import WithLogger
 from .stats import AgentStats, AggregatedEpisodeStats, EpisodeStats
@@ -28,7 +27,6 @@ from .stats import AgentStats, AggregatedEpisodeStats, EpisodeStats
 
 class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     _AGENT_FILE: str = "agent.pkl"
-    _BUFFER_FILE: str = "buffer.pkl"
     _STATS_FILE: str = "stats.parquet"
 
     _action_to_game = {
@@ -50,7 +48,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     }
 
     def __init__(self,
-                 map_name: str, map_config: Dict, buffer: ExperienceReplayBuffer = None,
+                 map_name: str, map_config: Dict,
                  train: bool = True, action_masking: bool = False, checkpoint_path: Union[str|Path] = None, tracker_update_freq_seconds: int = 10,
                  reward_mode: RewardMode = RewardMode.REWARD, score_method: str = "get_reward_as_score",
                  **kwargs):
@@ -88,7 +86,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_adjusted_reward = 0.
         self._reward_mode = reward_mode
         self._score_method = score_method
-        self._buffer = buffer
         self._available_actions = None
         self._current_state_tuple = None
         self._prev_state_tuple = None
@@ -108,14 +105,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self._checkpoint_path = Path(checkpoint_path)
             self._checkpoint_path.mkdir(exist_ok=True, parents=True)
             self._agent_path = self._checkpoint_path / self._AGENT_FILE
-            self._buffer_path = self._checkpoint_path / self._BUFFER_FILE
             self._stats_path = self._checkpoint_path / self._STATS_FILE
         else:
             self._checkpoint_path = None
             self._main_network_path = None
             self._target_network_path = None
             self._agent_path = None
-            self._buffer_path = None
             self._stats_path = None
 
         self._status_flags = dict(
@@ -153,10 +148,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return self._aggregated_episode_stats[self._map_name]
 
     @property
-    def burn_in_capacity(self) -> float:
-        return self._buffer.burn_in_capacity
-
-    @property
     def checkpoint_path(self) -> Optional[Path]:
         return self._checkpoint_path
 
@@ -169,11 +160,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def _update_checkpoint_paths(self):
         if self.checkpoint_path is None:
             self._agent_path = None
-            self._buffer_path = None
             self._stats_path = None
         else:
             self._agent_path = self.checkpoint_path / self._AGENT_FILE
-            self._buffer_path = self.checkpoint_path / self._BUFFER_FILE
             self._stats_path = self.checkpoint_path / self._STATS_FILE
 
     def save(self, checkpoint_path: Union[str|Path] = None):
@@ -190,25 +179,12 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         self.save_stats(self.checkpoint_path)
 
-        if self._buffer is not None:
-            with open(self._buffer_path, "wb") as f:
-                pickle.dump(self._buffer, f)
-                self.logger.info(f"Saved memory replay buffer to {self._buffer_path}")
-
     @classmethod
-    def load(cls, checkpoint_path: Union[str|Path], map_name: str, map_config: Dict, buffer: ExperienceReplayBuffer = None, **kwargs) -> Self:
+    def load(cls, checkpoint_path: Union[str|Path], map_name: str, map_config: Dict, **kwargs) -> Self:
         checkpoint_path = Path(checkpoint_path)
         agent_attrs_file = checkpoint_path / cls._AGENT_FILE
         with open(agent_attrs_file, mode="rb") as f:
             agent_attrs = pickle.load(f)
-
-        if "main_network_path" in agent_attrs:
-            agent_attrs["main_network_path"] = checkpoint_path / cls._MAIN_NETWORK_FILE
-        if "target_network_path" in agent_attrs:
-            agent_attrs["target_network_path"] = checkpoint_path / cls._TARGET_NETWORK_FILE
-
-        if buffer is not None:
-            agent_attrs["buffer"] = buffer
 
         init_attrs = cls._extract_init_arguments(checkpoint_path=checkpoint_path, agent_attrs=agent_attrs, map_name=map_name, map_config=map_config)
         agent = cls(**init_attrs, **kwargs)
@@ -279,7 +255,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             map_config=map_config,
             train=agent_attrs["train"],
             log_name=agent_attrs["log_name"],
-            buffer=agent_attrs["buffer"],
         )
 
     def _load_agent_attrs(self, agent_attrs: Dict):
@@ -309,7 +284,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             exploit=self._exploit,
             action_masking=self._action_masking,
             checkpoint_path=self.checkpoint_path,
-            buffer=self._buffer,
             agent_path=self._agent_path,
             stats_path=self._stats_path,
             agent_stats=self._agent_stats,
@@ -852,12 +826,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self.current_agent_stats.step_count += 1
             a = {RewardMode.SCORE: ("score", score), RewardMode.ADJUSTED_REWARD: ("adjusted reward", adjusted_reward), RewardMode.REWARD: ("reward", reward)}
             self.logger.debug(f"Previous action {a[self._reward_mode][0]}: {a[self._reward_mode][1]}")
-
-            if not self._exploit:
-                done = obs.last()
-                ohe_available_actions = self._actions_to_network(self._available_actions)
-                if self._buffer is not None:
-                    self._buffer.append(self._prev_state_tuple, self._prev_action, self._prev_action_args, self._current_reward, self._current_adjusted_reward, self._current_score, done, self._current_state_tuple, ohe_available_actions)
 
     def post_step(self, obs: TimeStep, action: AllActions, action_args: Dict[str, Any], original_action: AllActions, original_action_args: Dict[str, Any], is_valid_action: bool):
         self._prev_score = obs.observation.score_cumulative.score

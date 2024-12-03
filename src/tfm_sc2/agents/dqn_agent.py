@@ -9,7 +9,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from pysc2.env.environment import TimeStep
+from typing_extensions import override, Self
 
+from .stats import EpisodeStats, AgentStats, AggregatedEpisodeStats
 from ..actions import AllActions
 from ..networks.dqn_network import DQNNetwork
 from ..networks.experience_replay_buffer import ExperienceReplayBuffer
@@ -18,14 +20,14 @@ from .base_agent import BaseAgent
 
 
 class DQNAgent(BaseAgent):
+    _BUFFER_FILE: str = "buffer.pkl"
     _MAIN_NETWORK_FILE: str = "main_network.pt"
     _TARGET_NETWORK_FILE: str = "target_network.pt"
-    # _AGENT_FILE: str = "agent.pkl"
-    # _STATS_FILE: str =  "stats.parquet"
 
     def __init__(self, main_network: DQNNetwork,
                  hyperparams: DQNAgentParams,
                  target_network: DQNNetwork = None,
+                 buffer: ExperienceReplayBuffer = None,
                  random_mode: bool = False,
                  **kwargs):
         """Deep Q-Network agent.
@@ -40,6 +42,7 @@ class DQNAgent(BaseAgent):
 
         self.main_network = main_network
         self.target_network = target_network or deepcopy(main_network)
+        self._buffer = buffer
         self.hyperparams = hyperparams
         self.initial_epsilon = hyperparams.epsilon
         self.epsilon = hyperparams.epsilon
@@ -63,9 +66,11 @@ class DQNAgent(BaseAgent):
         if self._checkpoint_path is not None:
             self._main_network_path = self._checkpoint_path / self._MAIN_NETWORK_FILE
             self._target_network_path = self._checkpoint_path / self._TARGET_NETWORK_FILE
+            self._buffer_path = self._checkpoint_path / self._BUFFER_FILE
         else:
             self._main_network_path = None
             self._target_network_path = None
+            self._buffer_path = None
 
     @property
     def _collect_stats(self) -> bool:
@@ -76,9 +81,11 @@ class DQNAgent(BaseAgent):
         if self.checkpoint_path is None:
             self._main_network_path = None
             self._target_network_path = None
+            self._buffer_path = None
         else:
             self._main_network_path = self.checkpoint_path / self._MAIN_NETWORK_FILE
             self._target_network_path = self.checkpoint_path / self._TARGET_NETWORK_FILE
+            self._buffer_path = self.checkpoint_path / self._BUFFER_FILE
 
     @classmethod
     def _extract_init_arguments(cls, checkpoint_path: Path, agent_attrs: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -89,8 +96,9 @@ class DQNAgent(BaseAgent):
             **parent_attrs,
             main_network=torch.load(main_network_path),
             target_network=torch.load(target_network_path),
+            buffer=agent_attrs["buffer"],
             random_mode=agent_attrs.get("random_mode", agent_attrs.get("random_model", False)),
-            hyperparams=agent_attrs["hyperparams"]
+            hyperparams=agent_attrs["hyperparams"],
         )
 
     def _load_agent_attrs(self, agent_attrs: Dict):
@@ -105,6 +113,7 @@ class DQNAgent(BaseAgent):
         parent_attrs = super()._get_agent_attrs()
         return dict(
             hyperparams=self.hyperparams,
+            buffer=self._buffer,
             initial_epsilon=self.initial_epsilon,
             epsilon=self.epsilon,
             num_actions=self._num_actions,
@@ -118,6 +127,41 @@ class DQNAgent(BaseAgent):
         torch.save(self.main_network, self._main_network_path)
         torch.save(self.target_network, self._target_network_path)
 
+        if self._buffer is not None:
+            with open(self._buffer_path, "wb") as f:
+                pickle.dump(self._buffer, f)
+                self.logger.info(f"Saved memory replay buffer to {self._buffer_path}")
+
+    @classmethod
+    def load(cls, checkpoint_path: Union[str|Path], map_name: str, map_config: Dict, buffer: ExperienceReplayBuffer = None, **kwargs) -> Self:
+        checkpoint_path = Path(checkpoint_path)
+        agent_attrs_file = checkpoint_path / cls._AGENT_FILE
+        with open(agent_attrs_file, mode="rb") as f:
+            agent_attrs = pickle.load(f)
+
+        if "main_network_path" in agent_attrs:
+            agent_attrs["main_network_path"] = checkpoint_path / cls._MAIN_NETWORK_FILE
+        if "target_network_path" in agent_attrs:
+            agent_attrs["target_network_path"] = checkpoint_path / cls._TARGET_NETWORK_FILE
+
+        if buffer is not None:
+            agent_attrs["buffer"] = buffer
+
+        init_attrs = cls._extract_init_arguments(checkpoint_path=checkpoint_path, agent_attrs=agent_attrs, map_name=map_name, map_config=map_config)
+        agent = cls(**init_attrs, **kwargs)
+        agent._load_agent_attrs(agent_attrs)
+
+        if agent._current_episode_stats is None or agent._current_episode_stats.map_name != map_name:
+            agent._current_episode_stats = EpisodeStats(map_name=map_name)
+        if map_name not in agent._agent_stats:
+            agent._agent_stats[map_name] = AgentStats(map_name=map_name)
+        if map_name not in agent._aggregated_episode_stats:
+            agent._aggregated_episode_stats[map_name] = AggregatedEpisodeStats(map_name=map_name)
+        if map_name not in agent._episode_stats:
+            agent._episode_stats[map_name] = []
+
+        return agent
+
     def _current_agent_stage(self):
         if self.is_burnin:
             return AgentStage.BURN_IN
@@ -126,6 +170,10 @@ class DQNAgent(BaseAgent):
         if self.is_training:
             return AgentStage.TRAINING
         return AgentStage.UNKNOWN
+
+    @property
+    def burn_in_capacity(self) -> float:
+        return self._buffer.burn_in_capacity
 
     @property
     def memory_replay_ready(self) -> bool:
@@ -188,10 +236,16 @@ class DQNAgent(BaseAgent):
 
     def pre_step(self, obs: TimeStep, is_first_step: bool):
         super().pre_step(obs, is_first_step)
-        if not obs.first():
-            # do updates
-            done = obs.last()
 
+        if not is_first_step:
+            done = obs.last()
+            if not self._exploit and self._buffer is not None:
+                ohe_available_actions = self._actions_to_network(self._available_actions)
+                self._buffer.append(self._prev_state_tuple, self._prev_action, self._prev_action_args,
+                                    self._current_reward, self._current_adjusted_reward, self._current_score, done,
+                                    self._current_state_tuple, ohe_available_actions)
+
+            # do updates
             if (not self.is_burnin) and self.is_training:
                 main_net_updated = False
                 target_net_updated = False
