@@ -893,14 +893,14 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             log_msg = "\n".join(log_msg_parts)
             self.logger.info(log_msg)
 
-            if (self.is_training) and (self.checkpoint_path is not None) and new_max_mean_rewards:
-                self.logger.info(f"New max reward during training ({max_mean_rewards_str} -> {mean_rewards:.2f}). Saving best agent...")
-                checkpoint_path = self.checkpoint_path
-                save_path = self.checkpoint_path / "best_agent"
-                save_path.mkdir(exist_ok=True, parents=True)
-                self.save(checkpoint_path=save_path)
-                self.checkpoint_path = checkpoint_path
-                self._best_mean_rewards = mean_rewards
+            # if (self.is_training) and (self.checkpoint_path is not None) and new_max_mean_rewards:
+            #     self.logger.info(f"New max reward during training ({max_mean_rewards_str} -> {mean_rewards:.2f}). Saving best agent...")
+            #     checkpoint_path = self.checkpoint_path
+            #     save_path = self.checkpoint_path / "best_agent"
+            #     save_path.mkdir(exist_ok=True, parents=True)
+            #     self.save(checkpoint_path=save_path)
+            #     self.checkpoint_path = checkpoint_path
+            #     self._best_mean_rewards = mean_rewards
         else:
             now = time.time()
             if (self._tracker is not None) and (now - self._tracker_last_update > self._tracker_update_freq_seconds):
