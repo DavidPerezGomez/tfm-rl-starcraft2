@@ -93,9 +93,11 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_state_tuple = None
         self._prev_state_tuple = None
         self._current_obs_unit_info = None
+        self._prev_minerals = 0
         self._prev_army_spending = 0
         self._prev_diff_marines = 0
         self._prev_health_difference_score = 0
+        self._prev_game_score = 0
 
         self._action_to_idx = None
         self._idx_to_action = None
@@ -367,9 +369,11 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._available_actions = None
         self._current_state_tuple = None
         self._current_obs_unit_info = None
+        self._prev_minerals = 0
         self._prev_army_spending = 0
         self._prev_diff_marines = 0
         self._prev_health_difference_score = 0
+        self._prev_game_score = 0
 
         current_stage = self._current_agent_stage().name
         self._current_episode_stats = EpisodeStats(map_name=self._map_name, is_burnin=False, is_training=self.is_training, is_exploit=self._exploit, episode=self.current_agent_stats.episode_count, initial_stage=current_stage)
@@ -655,6 +659,17 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return total_army_health - enemy_total_army_health
 
+    def get_mineral_count_delta(self, obs: TimeStep) -> float:
+        minerals = obs.observation.player.minerals
+        if obs.first():
+            self._prev_minerals = minerals
+            return 0
+        else:
+            prev = self._prev_minerals
+            delta = minerals - prev
+            self._prev_minerals = minerals
+            return delta
+
     def get_army_spending(self) -> float:
         barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
         # depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot)
@@ -724,6 +739,54 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
     def get_reward_as_score(self, obs: TimeStep) -> float:
         return obs.reward
+
+    def get_game_score(self) -> float:
+        damaged_unit_min_factor = 0.5
+        unit_in_progress_factor = 0.25
+
+        def get_units_value(units, unit_cost: SC2Costs):
+            return sum([(max(damaged_unit_min_factor, u.health_ratio / 255) * unit_cost.minerals) if self.is_complete(u)
+                        else (unit_in_progress_factor * unit_cost.minerals)
+                        for u in units])
+
+        def get_player_score(player: PlayerRelative):
+            command_centers = self._get_units(alliances=player, unit_types=units.Terran.CommandCenter)
+            supply_depots = self._get_units(alliances=player, unit_types=units.Terran.SupplyDepot)
+            barracks = self._get_units(alliances=player, unit_types=units.Terran.Barracks)
+            marines = self._get_units(alliances=player, unit_types=units.Terran.Marine)
+            workers = self._get_units(alliances=player, unit_types=units.Terran.SCV)
+            marines_in_progress = sum([cc.order_length for cc in command_centers])
+            workers_in_progress = sum([b.order_length for b in barracks])
+
+            return get_units_value(command_centers, SC2Costs.COMMAND_CENTER) \
+                    + get_units_value(supply_depots, SC2Costs.SUPPLY_DEPOT) \
+                    + get_units_value(barracks, SC2Costs.BARRACKS) \
+                    + get_units_value(marines, SC2Costs.MARINE) \
+                    + marines_in_progress * unit_in_progress_factor \
+                    + get_units_value(workers, SC2Costs.SCV) \
+                    + workers_in_progress * unit_in_progress_factor
+
+        ally_score = get_player_score(PlayerRelative.SELF)
+        enemy_score = get_player_score(PlayerRelative.ENEMY)
+
+        return ally_score - enemy_score
+
+
+    def get_game_score_delta(self, obs: TimeStep) -> float:
+        win_factor = 1000
+        step_cost = 5
+        game_score = self.get_game_score()
+        if obs.first():
+            self._prev_game_score = 0
+            return 0
+        elif obs.last():
+            self._prev_game_score = game_score
+            return win_factor * obs.reward
+        else:
+            prev = self._prev_game_score
+            delta = game_score - prev
+            self._prev_game_score = game_score
+            return delta - step_cost
 
     def _convert_obs_to_state(self, obs: TimeStep) -> Tuple:
         actions_state = self._get_actions_state()
