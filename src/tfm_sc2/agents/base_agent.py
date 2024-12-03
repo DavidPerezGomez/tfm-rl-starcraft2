@@ -866,6 +866,11 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_action_args = original_action_args
         self._prev_action_is_valid = is_valid_action
 
+        if is_valid_action:
+            self._current_episode_stats.add_valid_action(action)
+        else:
+            self._current_episode_stats.add_invalid_action(action)
+
         # if not self._exploit:
         if obs.last():
             emissions = self._tracker.flush() if self._tracker is not None else 0.
@@ -953,12 +958,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         if not is_valid_action:
             self.logger.debug(f"Action {action.name} is not valid anymore, returning NO_OP")
-            self._current_episode_stats.add_invalid_action(action)
             action = AllActions.NO_OP
             action_args = None
 
         if is_valid_action:
-            self._current_episode_stats.add_valid_action(action)
             self.logger.debug(f"[Step {self.steps}] Performing action {action.name} with args: {action_args}")
 
         game_action = self._action_to_game[action]
