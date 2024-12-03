@@ -57,7 +57,7 @@ def setup_logging(log_file: str = None):
         log_file.parent.mkdir(exist_ok=True, parents=True)
     WithLogger.init_logging(stream_level=logging.INFO, file_name=log_file, file_level=logging.DEBUG)
     absl_logger = logging.getLogger("absl")
-    absl_logger.setLevel(logging.INFO)
+    absl_logger.setLevel(logging.DEBUG)
 
 def load_dqn_agent(cls, map_name, map_config, checkpoint_path: Path, action_masking: bool, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
     MainLogger.get().info(f"Loading agent from file {checkpoint_path}")
@@ -71,7 +71,7 @@ def load_dqn(network_path):
     dqn = torch.load(network_path)
     return dqn
 
-def create_dqn(cls = None):
+def create_dqn(cls = None, log_name: str = None):
     logger = MainLogger.get()
     if cls in [GameManagerDQNAgent, GameManagerRandomAgent]:
         num_actions = len(GameManagerActions)
@@ -109,7 +109,7 @@ def create_dqn(cls = None):
     obs_input_shape = len(State._fields)
     learning_rate = FLAGS.lr
     lr_milestones = FLAGS.lr_milestones
-    dqn = DQNNetwork(model_layers=model_layers, observation_space_shape=obs_input_shape, num_actions=num_actions, learning_rate=learning_rate, lr_milestones=lr_milestones)
+    dqn = DQNNetwork(model_layers=model_layers, observation_space_shape=obs_input_shape, num_actions=num_actions, learning_rate=learning_rate, lr_milestones=lr_milestones, log_name=log_name)
 
     return dqn
 
@@ -125,17 +125,17 @@ def create_dqn_agent(cls, map_name, map_config, main_network: DQNNetwork, checkp
 
     return agent
 
-    if load_networks_only:
 def load_or_create_dqn_agent(cls, map_name, map_config, load_agent: bool, checkpoint_path: Path, action_masking: bool, log_name: str, load_networks_only: bool, reward_mode: RewardMode, memory_size: int = 100000, burn_in: int = 10000, buffer: ExperienceReplayBuffer = None, **extra_agent_args):
-        if buffer is None:
-            buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-        main_network = load_dqn(checkpoint_path / SingleDQNAgent._MAIN_NETWORK_FILE)
-        target_network = load_dqn(checkpoint_path / SingleDQNAgent._TARGET_NETWORK_FILE)
-    elif not load_agent:
-        main_network = create_dqn(cls)
+    if not load_agent:
+        main_network = create_dqn(cls, log_name + " - DQNNetwork")
         if buffer is None:
             buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
         agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path, main_network=main_network, buffer=buffer, log_name=log_name, action_masking=action_masking, reward_mode=reward_mode, **extra_agent_args)
+    elif load_networks_only:
+            if buffer is None:
+                buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
+            main_network = load_dqn(checkpoint_path / SingleDQNAgent._MAIN_NETWORK_FILE)
+            target_network = load_dqn(checkpoint_path / SingleDQNAgent._TARGET_NETWORK_FILE)
             agent = create_dqn_agent(cls=cls, map_name=map_name, map_config=map_config, checkpoint_path=checkpoint_path,
                                      main_network=main_network, target_network=target_network, buffer=buffer,
                                      log_name=log_name, action_masking=action_masking, reward_mode=reward_mode,
@@ -168,7 +168,7 @@ def load_or_create_random_agent(cls, map_name, map_config, load_agent: bool, che
     else:
         if buffer is None:
             buffer = ExperienceReplayBuffer(memory_size=memory_size, burn_in=burn_in)
-        agent = create_random_agent(cls=cls, map_name=map_name, map_config=map_config, buffer=buffer, checkpoint_path=checkpoint_path, log_name=log_name, reward_method=reward_method, **extra_agent_args)
+        agent = create_random_agent(cls=cls, map_name=map_name, map_config=map_config, buffer=buffer, checkpoint_path=checkpoint_path, log_name=log_name, reward_mode=reward_mode, **extra_agent_args)
 
     return agent
 
@@ -180,6 +180,7 @@ def main(unused_argv):
 
     save_agent = FLAGS.save_agent
     exploit = FLAGS.exploit
+    fine_tune = FLAGS.fine_tune
     save_path = checkpoint_path
     if exploit:
         save_path = checkpoint_path / "exploit"
@@ -188,7 +189,7 @@ def main(unused_argv):
     log_file = save_path / FLAGS.log_file
     setup_logging(log_file)
     logger = MainLogger.get()
-    logger.debug(f"Running with flags {FLAGS.flags_into_string()}")
+    logger.info(f"Running with flags {FLAGS.flags_into_string()}")
     SC2_CONFIG["visualize"] = FLAGS.visualize
 
     map_name = FLAGS.map_name
@@ -304,7 +305,7 @@ def main(unused_argv):
     common_args = dict(buffer=buffer, load_agent=load_agent, checkpoint_path=checkpoint_path, reward_mode=reward_mode, score_method=FLAGS.score_method, **base_args)
     dqn_agent_args = dict(load_networks_only=load_networks_only, **common_args)
     gm_dqn_agent_args = dict(time_displacement=FLAGS.gm_time_displacement, **dqn_agent_args)
-    subagent_args = dict(buffer=None, load_networks_only=False, **base_args)
+    subagent_args = dict(load_networks_only=load_networks_only, epsilon=FLAGS.subagent_epsilon, **base_args)
     random_subagent_args = dict(buffer=None, load_agent=False, **base_args)
     match FLAGS.agent_key:
         case "single.random":
@@ -358,18 +359,32 @@ def main(unused_argv):
             arm_agent_file = arm_path / "agent.pkl"
             aam_path = checkpoint_path / "army_attack_manager"
             aam_agent_file = aam_path / "agent.pkl"
-            # assert bm_agent_file.exists(), f"The agent file for the base manager doesn't exist '{bm_agent_file}'"
-            # assert arm_agent_file.exists(), f"The agent file for the army recruit manager doesn't exist '{arm_agent_file}'"
-            # assert aam_agent_file.exists(), f"The agent file for the attack manager doesn't exist '{arm_agent_file}'"
+
+            assert bm_agent_file.exists() or load_networks_only, f"The agent file for the base manager doesn't exist '{bm_agent_file}'"
+            assert arm_agent_file.exists() or load_networks_only, f"The agent file for the army recruit manager doesn't exist '{arm_agent_file}'"
+            assert aam_agent_file.exists() or load_networks_only, f"The agent file for the attack manager doesn't exist '{arm_agent_file}'"
+
             logger.info("Loading base manager")
-            base_manager = load_or_create_dqn_agent(BaseManagerDQNAgent, **subagent_args, load_agent=bm_agent_file.exists(), checkpoint_path=bm_path, log_name="Sub Agent - Base Manager")
-            base_manager.exploit()
+            bm_buffer = ExperienceReplayBuffer(memory_size=FLAGS.base_subagent_memory_size, burn_in=FLAGS.base_subagent_burn_in)
+            base_manager = load_or_create_dqn_agent(BaseManagerDQNAgent, **subagent_args, load_agent=True, checkpoint_path=bm_path, buffer=bm_buffer,
+                                                    reward_mode=base_subagent_reward_mode, score_method=FLAGS.base_subagent_score_method, log_name="Sub Agent - Base Manager")
+            base_manager.main_network.reset_logging(log_name="Sub Agent - Base Manager - DQNNetwork")
+            base_manager.target_network.reset_logging(log_name="Sub Agent - Base Manager - DQNNetwork")
+
             logger.info("Loading army recruit manager")
-            army_recruit_manager = load_or_create_dqn_agent(ArmyRecruitManagerDQNAgent, **subagent_args, load_agent=arm_agent_file.exists(), checkpoint_path=arm_path, log_name="Sub Agent - Army Manager")
-            army_recruit_manager.exploit()
+            arm_buffer = ExperienceReplayBuffer(memory_size=FLAGS.recruit_subagent_memory_size, burn_in=FLAGS.recruit_subagent_burn_in)
+            army_recruit_manager = load_or_create_dqn_agent(ArmyRecruitManagerDQNAgent, **subagent_args, load_agent=True, checkpoint_path=arm_path, buffer=arm_buffer,
+                                                            reward_mode=recruit_subagent_reward_mode, score_method=FLAGS.recruit_subagent_score_method, log_name="Sub Agent - Army Manager")
+            army_recruit_manager.main_network.reset_logging(log_name="Sub Agent - Army Manager - DQNNetwork")
+            army_recruit_manager.target_network.reset_logging(log_name="Sub Agent - Army Manager - DQNNetwork")
+
             logger.info("Loading attack manager")
-            army_attack_manager = load_or_create_dqn_agent(ArmyAttackManagerDQNAgent, **subagent_args, load_agent=aam_agent_file.exists(), checkpoint_path=aam_path, log_name="Sub Agent - Attack Manager")
-            army_attack_manager.exploit()
+            aam_buffer = ExperienceReplayBuffer(memory_size=FLAGS.attack_subagent_memory_size, burn_in=FLAGS.attack_subagent_burn_in)
+            army_attack_manager = load_or_create_dqn_agent(ArmyAttackManagerDQNAgent, **subagent_args, load_agent=True, checkpoint_path=aam_path, buffer=aam_buffer,
+                                                           reward_mode=attack_subagent_reward_mode, score_method=FLAGS.attack_subagent_score_method, log_name="Sub Agent - Attack Manager")
+            army_attack_manager.main_network.reset_logging(log_name="Sub Agent - Attack Manager - DQNNetwork")
+            army_attack_manager.target_network.reset_logging(log_name="Sub Agent - Attack Manager - DQNNetwork")
+
             extra_agent_args = dict(
                 base_manager=base_manager,
                 army_recruit_manager=army_recruit_manager,
@@ -400,7 +415,9 @@ def main(unused_argv):
         case _:
             raise RuntimeError(f"Unknown agent key {FLAGS.agent_key}")
 
-    if exploit:
+    if fine_tune:
+        agent.fine_tune()
+    elif exploit:
         agent.exploit()
     else:
         agent.train()
@@ -460,14 +477,19 @@ def main(unused_argv):
                     if current_episode_failures >= max_episode_failures:
                         logger.error(f"Reached max number of allowed episode failures, stopping run")
 
-                except Exception as error:
-                    logger.warning("Error encountered, trying to restart the episode again")
-                    logger.warning(error)
-                    current_episode_failures += 1
-                    if current_episode_failures >= max_episode_failures:
-                        logger.error(f"Reached max number of allowed episode failures, stopping run")
+                # except Exception as error:
+                #     logger.warning("Error encountered, trying to restart the episode again")
+                #     logger.warning(error)
+                #     current_episode_failures += 1
+                #     if current_episode_failures >= max_episode_failures:
+                #         logger.error(f"Reached max number of allowed episode failures, stopping run")
 
             logger.info(f"Finished burnin after {burnin_episodes} episodes")
+
+            if FLAGS.export_stats_only:
+                agent.save_stats(save_path)
+            else:
+                agent.save(save_path)
 
         num_wins = 0
         num_wins_enemy = 0
@@ -507,8 +529,8 @@ def main(unused_argv):
                             total_time_actions += step_t1 - step_t0
                             total_time_steps += step_t2 - step_t1
                             n_steps += 1
-                            logger.info(f"Action calculated in {(step_t1 - step_t0)*1000:-2f}ms")
-                            logger.info(f"Step performed in {(step_t2 - step_t1)*1000:-2f}ms")
+                            logger.debug(f"Action calculated in {(step_t1 - step_t0)*1000:-2f}ms")
+                            logger.debug(f"Step performed in {(step_t2 - step_t1)*1000:-2f}ms")
 
                             episode_ended = timesteps[0].last()
                             if episode_ended:
@@ -594,7 +616,14 @@ if __name__ == "__main__":
 
     flags.DEFINE_integer("memory_size", 100000, required=False, help="Total memory size for the buffer.", lower_bound=100)
     flags.DEFINE_integer("burn_in", 10000, required=False, help="Burn-in size for the buffer.", lower_bound=0)
+    flags.DEFINE_integer("base_subagent_memory_size", 100000, required=False, help="Total memory size for the buffer.", lower_bound=100)
+    flags.DEFINE_integer("base_subagent_burn_in", 10000, required=False, help="Burn-in size for the buffer.", lower_bound=0)
+    flags.DEFINE_integer("recruit_subagent_memory_size", 100000, required=False, help="Total memory size for the buffer.", lower_bound=100)
+    flags.DEFINE_integer("recruit_subagent_burn_in", 10000, required=False, help="Burn-in size for the buffer.", lower_bound=0)
+    flags.DEFINE_integer("attack_subagent_memory_size", 100000, required=False, help="Total memory size for the buffer.", lower_bound=100)
+    flags.DEFINE_integer("attack_subagent_burn_in", 10000, required=False, help="Burn-in size for the buffer.", lower_bound=0)
     flags.DEFINE_float("epsilon", 0.9, required=False, help="Epsilon for DQN agents.", upper_bound=1.)
+    flags.DEFINE_float("subagent_epsilon", 0.9, required=False, help="Epsilon for DQN agents.", upper_bound=1.)
     flags.DEFINE_float("epsilon_decay", 0.99, required=False, help="Epsilon decay for DQN agents.", lower_bound=0.01)
     flags.DEFINE_float("min_epsilon", 0.01, required=False, help="Minimum value that epsilon can have by decaying.", lower_bound=1e-4)
     flags.DEFINE_float("lr", 1e-4, required=False, help="Learning rate for DQN agents.", upper_bound=1.)

@@ -7,17 +7,19 @@ class WithLogger:
     _LOGGING_INITIALIZED = False
     def __init__(self, logger: Optional[logging.Logger] = None, log_name: str = None, log_level: Optional[int] = logging.DEBUG, **kwargs):
         super().__init__(**kwargs)
+        self.reset_logging(logger=logger, log_name=log_name, log_level=log_level)
 
+    @property
+    def logger(self) -> logging.Logger:
+        return self._logger
+
+    def reset_logging(self,  logger: Optional[logging.Logger] = None, log_name: str = None, log_level: Optional[int] = logging.DEBUG):
         if not WithLogger._LOGGING_INITIALIZED:
             WithLogger.init_logging()
 
         self._log_name = log_name or self.__class__.__name__
         self._logger = logger or logging.getLogger(self._log_name)
         self._logger.setLevel(log_level)
-
-    @property
-    def logger(self) -> logging.Logger:
-        return self._logger
 
     @staticmethod
     def init_logging(stream_level: int = logging.INFO, file_name: Optional[Union[str, Path]] = None, file_level: int = logging.DEBUG, file_mode: str = 'w', file_encoding: str = 'utf-8'):
