@@ -632,7 +632,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         closes_unit_idx = np.random.choice(min_distances)
         return units[closes_unit_idx], min_distance
 
-    def get_reward_and_score(self, obs: TimeStep) -> Tuple[float, float, float]:
+    def get_reward_and_score(self, obs: TimeStep, is_first_step: bool = False) -> Tuple[float, float, float]:
         reward = obs.reward
 
         get_score = getattr(self, self._score_method)
@@ -648,6 +648,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_score = score
         self._current_reward = reward
         self._current_adjusted_reward = adjusted_reward
+
+        if is_first_step:
+            return 0, 0, 0
 
         return reward, adjusted_reward, score
 
@@ -828,7 +831,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return ohe_actions
 
-    def pre_step(self, obs: TimeStep):
+    def pre_step(self, obs: TimeStep, is_first_step: bool):
         self._current_obs_unit_info = self._gather_obs_info(obs)
 
         self.update_supply_depot_positions()
@@ -838,23 +841,23 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._available_actions = self.calculate_available_actions(obs)
         self._current_state_tuple = self._convert_obs_to_state(obs)
 
-        # if not self._exploit:
-        reward, adjusted_reward, score = self.get_reward_and_score(obs)
-        self._current_episode_stats.reward += reward
-        self._current_episode_stats.adjusted_reward += adjusted_reward
-        self._current_episode_stats.score += score
-        self._current_episode_stats.steps += 1
-        self.current_agent_stats.step_count += 1
+        if is_first_step:
+            self.setup_actions()
+        else:
+            reward, adjusted_reward, score = self.get_reward_and_score(obs, is_first_step)
+            self._current_episode_stats.reward += reward
+            self._current_episode_stats.adjusted_reward += adjusted_reward
+            self._current_episode_stats.score += score
+            self._current_episode_stats.steps += 1
+            self.current_agent_stats.step_count += 1
             a = {RewardMode.SCORE: ("score", score), RewardMode.ADJUSTED_REWARD: ("adjusted reward", adjusted_reward), RewardMode.REWARD: ("reward", reward)}
             self.logger.debug(f"Previous action {a[self._reward_mode][0]}: {a[self._reward_mode][1]}")
 
-        if obs.first():
-            self.setup_actions()
-        elif not self._exploit:
-            done = obs.last()
-            ohe_available_actions = self._actions_to_network(self._available_actions)
-            if self._buffer is not None:
-                self._buffer.append(self._prev_state_tuple, self._prev_action, self._prev_action_args, self._current_reward, self._current_adjusted_reward, self._current_score, done, self._current_state_tuple, ohe_available_actions)
+            if not self._exploit:
+                done = obs.last()
+                ohe_available_actions = self._actions_to_network(self._available_actions)
+                if self._buffer is not None:
+                    self._buffer.append(self._prev_state_tuple, self._prev_action, self._prev_action_args, self._current_reward, self._current_adjusted_reward, self._current_score, done, self._current_state_tuple, ohe_available_actions)
 
     def post_step(self, obs: TimeStep, action: AllActions, action_args: Dict[str, Any], original_action: AllActions, original_action_args: Dict[str, Any], is_valid_action: bool):
         self._prev_score = obs.observation.score_cumulative.score
@@ -940,7 +943,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         if obs.first():
             self.setup_positions(obs)
 
-        self.pre_step(obs)
+        self.pre_step(obs, obs.first())
 
         super().step(obs)
 

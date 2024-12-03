@@ -76,7 +76,7 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
         self._army_attack_manager.setup_positions(obs)
 
     @override
-    def pre_step(self, obs: TimeStep):
+    def pre_step(self, obs: TimeStep, is_first_step: bool):
         self._take_step = obs.first() or self._completed_episode_steps % self._time_displacement == 0
 
         self._base_manager.pre_step(obs)
@@ -115,7 +115,7 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
         if obs.first():
             self.setup_positions(obs)
 
-        self.pre_step(obs)
+        self.pre_step(obs, obs.first())
 
         super().step(obs, only_super_step=True)
 

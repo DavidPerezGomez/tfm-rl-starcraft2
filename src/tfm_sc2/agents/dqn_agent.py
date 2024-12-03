@@ -186,8 +186,8 @@ class DQNAgent(BaseAgent):
 
         return action, action_args, is_valid_action
 
-    def pre_step(self, obs: TimeStep):
-        super().pre_step(obs)
+    def pre_step(self, obs: TimeStep, is_first_step: bool):
+        super().pre_step(obs, is_first_step)
         if not obs.first():
             # do updates
             done = obs.last()
