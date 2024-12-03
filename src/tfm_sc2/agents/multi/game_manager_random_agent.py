@@ -13,10 +13,6 @@ from .game_manager_base_agent import GameManagerBaseAgent
 
 
 class GameManagerRandomAgent(GameManagerBaseAgent, BaseAgent):
-    def select_action(self, obs: TimeStep, valid_actions = None) -> Tuple[AllActions, Dict[str, Any]]:
-        if valid_actions is not None:
-            action = random.choice(valid_actions)
-        else:
-            action = random.choice(self.agent_actions)
 
-        return action
+    def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any]]:
+        return random.choice(self.agent_actions)

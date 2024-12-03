@@ -3,6 +3,7 @@ from typing import Any, Dict, Tuple
 
 from pysc2.env.environment import TimeStep
 from pysc2.lib import actions
+from typing_extensions import override
 
 from ...actions import AllActions
 from ..dqn_agent import DQNAgent
@@ -17,6 +18,14 @@ class GameManagerDQNAgent(GameManagerBaseAgent, DQNAgent):
 
     def _select_game_manager_action(self, obs: TimeStep) -> GameManagerActions:
         return random.choice(self.agent_actions)
+
+    @override
+    @property
+    def memory_replay_ready(self) -> bool:
+        return super().memory_replay_ready \
+                and self._base_manager.memory_replay_ready \
+                and self._army_attack_manager.memory_replay_ready \
+                and self._army_recruit_manager.memory_replay_ready \
 
     def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any]]:
         valid_actions = self._available_actions

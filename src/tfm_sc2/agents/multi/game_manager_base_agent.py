@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import List
+from pathlib import Path
+from typing import List, Union
 
 from pysc2.env.environment import TimeStep
 from pysc2.lib import actions
@@ -26,21 +27,45 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
         self._base_manager = base_manager
         self._army_recruit_manager = army_recruit_manager
         self._army_attack_manager = army_attack_manager
+        self._proxy_agent = None
+        self._prev_proxy_agent = None
         self._current_game_manager_action = None
         self._time_displacement = time_displacement
         self._completed_episode_steps = 0
         self._take_step = True
 
-        self._base_manager.exploit()
-        self._army_recruit_manager.exploit()
-        self._army_attack_manager.exploit()
+        # self._base_manager.exploit()
+        # self._army_recruit_manager.exploit()
+        # self._army_attack_manager.exploit()
         self._base_manager.setup_actions()
         self._army_recruit_manager.setup_actions()
         self._army_attack_manager.setup_actions()
 
     @override
+    def train(self):
+        super().train()
+        self._base_manager.exploit()
+        self._army_recruit_manager.exploit()
+        self._army_attack_manager.exploit()
+
+    @override
+    def exploit(self):
+        super().exploit()
+        self._base_manager.exploit()
+        self._army_recruit_manager.exploit()
+        self._army_attack_manager.exploit()
+
+    def fine_tune(self):
+        super().train()
+        self._base_manager.train()
+        self._army_recruit_manager.train()
+        self._army_attack_manager.train()
+
+    @override
     def reset(self, **kwargs):
         super().reset()
+        self._proxy_agent = None
+        self._prev_proxy_agent = None
         self._current_game_manager_action = None
         self._completed_episode_steps = 0
         self._take_step = True
@@ -54,19 +79,16 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
     def select_action(self, obs: TimeStep) -> GameManagerActions:
         pass
 
-    def forward_action(self, obs: TimeStep, action: GameManagerActions):
-        match action:
+    def _select_proxy_agent(self):
+        match self._current_game_manager_action:
             case GameManagerActions.EXPAND_BASE:
-                proxy_manager = self._base_manager
+                self._proxy_agent = self._base_manager
             case GameManagerActions.EXPAND_ARMY:
-                proxy_manager = self._army_recruit_manager
+                self._proxy_agent = self._army_recruit_manager
             case GameManagerActions.ATTACK:
-                proxy_manager = self._army_attack_manager
+                self._proxy_agent = self._army_attack_manager
             case _:
-                raise RuntimeError(f"Unknown action: {action.name}")
-
-        actual_action, action_args, is_valid_action = proxy_manager.select_action(obs=obs)
-        return actual_action, action_args, is_valid_action, proxy_manager
+                raise RuntimeError(f"Unknown action: {self._current_game_manager_action.name}")
 
     @override
     def setup_positions(self, obs: TimeStep):
@@ -79,35 +101,35 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
     def pre_step(self, obs: TimeStep, is_first_step: bool):
         self._take_step = obs.first() or self._completed_episode_steps % self._time_displacement == 0
 
-        self._base_manager.pre_step(obs)
-        self._army_recruit_manager.pre_step(obs)
-        self._army_attack_manager.pre_step(obs)
+        # self._base_manager.pre_step(obs, obs.first())
+        # self._army_recruit_manager.pre_step(obs, obs.first())
+        # self._army_attack_manager.pre_step(obs, obs.first())
         if self._take_step:
-            super().pre_step(obs)
+            super().pre_step(obs, obs.first())
 
     @override
     def update_command_center_positions(self):
         if self._take_step:
             super().update_command_center_positions()
-        self._base_manager.update_command_center_positions()
-        self._army_recruit_manager.update_command_center_positions()
-        self._army_attack_manager.update_command_center_positions()
+        # self._base_manager.update_command_center_positions()
+        # self._army_recruit_manager.update_command_center_positions()
+        # self._army_attack_manager.update_command_center_positions()
 
     @override
     def update_supply_depot_positions(self):
         if self._take_step:
             super().update_supply_depot_positions()
-        self._base_manager.update_supply_depot_positions()
-        self._army_recruit_manager.update_supply_depot_positions()
-        self._army_attack_manager.update_supply_depot_positions()
+        # self._base_manager.update_supply_depot_positions()
+        # self._army_recruit_manager.update_supply_depot_positions()
+        # self._army_attack_manager.update_supply_depot_positions()
 
     @override
     def update_barracks_positions(self):
         if self._take_step:
             super().update_barracks_positions()
-        self._base_manager.update_barracks_positions()
-        self._army_recruit_manager.update_barracks_positions()
-        self._army_attack_manager.update_barracks_positions()
+        # self._base_manager.update_barracks_positions()
+        # self._army_recruit_manager.update_barracks_positions()
+        # self._army_attack_manager.update_barracks_positions()
 
 
     @override
@@ -123,8 +145,15 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
             self.logger.debug("Taking game manager action")
             self._available_actions = self.calculate_available_actions(obs)
             self._current_game_manager_action = self.select_action(obs)
+            self._select_proxy_agent()
 
-        action, action_args, is_valid_action, proxy_manager = self.forward_action(obs=obs, action=self._current_game_manager_action)
+        if self._prev_proxy_agent is not None:
+            self._prev_proxy_agent.pre_step(obs, obs.first())
+
+        if self._prev_proxy_agent != self._proxy_agent:
+            self._proxy_agent.pre_step(obs, True)
+
+        action, action_args, is_valid_action = self._proxy_agent.select_action(obs=obs)
 
         # if action == AllActions.NO_OP:
         #     self.logger.debug(f"Proxy manager for action {game_manager_action.name} returned a no-op, selecting a different action...")
@@ -150,7 +179,9 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
             self.logger.debug(f"[Step {self.steps}] Manager action: {self._current_game_manager_action.name} // Sub-agent action {action.name} (original action = {original_action})")
 
         self.post_step(obs, self._current_game_manager_action, None, self._current_game_manager_action, None, True)
-        # self.post_step(obs, action, action_args, original_action, original_action_args, is_valid_action)
+        if not obs.last():
+            self._proxy_agent.post_step(obs, action, action_args, original_action, original_action_args, is_valid_action)
+        self._prev_proxy_agent = self._proxy_agent
 
         game_action = self._action_to_game[action]
 
@@ -160,3 +191,10 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
             return game_action(**action_args)
 
         return game_action()
+
+    @override
+    def save(self, checkpoint_path: Union[str|Path] = None):
+        super().save(checkpoint_path)
+        self._base_manager.save(self.checkpoint_path / "base_manager")
+        self._army_recruit_manager.save(self.checkpoint_path / "army_recruit_manager")
+        self._army_attack_manager.save(self.checkpoint_path / "army_attack_manager")
