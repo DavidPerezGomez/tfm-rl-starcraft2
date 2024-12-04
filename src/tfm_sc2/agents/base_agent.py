@@ -572,7 +572,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         closes_unit_idx = np.random.choice(min_distances)
         return units[closes_unit_idx], min_distance
 
-    def get_reward_and_score(self, obs: TimeStep, is_first_step: bool = False) -> Tuple[float, float, float]:
+    def get_reward_and_score(self, obs: TimeStep, eval_step: bool = True) -> Tuple[float, float, float]:
         reward = obs.reward
 
         get_score = getattr(self, self._score_method)
@@ -589,7 +589,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_reward = reward
         self._current_adjusted_reward = adjusted_reward
 
-        if is_first_step:
+        if not eval_step:
             return 0, 0, 0
 
         return reward, adjusted_reward, score
@@ -771,7 +771,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return ohe_actions
 
-    def pre_step(self, obs: TimeStep, is_first_step: bool):
+    def pre_step(self, obs: TimeStep, eval_step: bool = True):
         self._current_obs_unit_info = self._gather_obs_info(obs)
 
         self.update_supply_depot_positions()
@@ -781,10 +781,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._available_actions = self.calculate_available_actions(obs)
         self._current_state_tuple = self._convert_obs_to_state(obs)
 
-        if is_first_step:
+        if not eval_step:
             self.setup_actions()
         else:
-            reward, adjusted_reward, score = self.get_reward_and_score(obs, is_first_step)
+            reward, adjusted_reward, score = self.get_reward_and_score(obs, eval_step)
             self._current_episode_stats.reward += reward
             self._current_episode_stats.adjusted_reward += adjusted_reward
             self._current_episode_stats.score += score
@@ -874,7 +874,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         if obs.first():
             self.setup_positions(obs)
 
-        self.pre_step(obs, obs.first())
+        self.pre_step(obs, not obs.first())
 
         super().step(obs)
 

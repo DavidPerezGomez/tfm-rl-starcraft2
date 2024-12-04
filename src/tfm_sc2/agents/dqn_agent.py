@@ -232,10 +232,10 @@ class DQNAgent(BaseAgent):
 
         return action, action_args, is_valid_action
 
-    def pre_step(self, obs: TimeStep, is_first_step: bool):
-        super().pre_step(obs, is_first_step)
+    def pre_step(self, obs: TimeStep, eval_step: bool = True):
+        super().pre_step(obs, eval_step)
 
-        if not is_first_step:
+        if eval_step:
             done = obs.last()
             if not self._exploit and self._buffer is not None:
                 ohe_available_actions = self._actions_to_network(self._available_actions)
