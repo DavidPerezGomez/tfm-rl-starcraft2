@@ -3,7 +3,7 @@ from typing import Dict, List
 
 import numpy as np
 
-from ..actions import AllActions
+from ..actions import AllActions, GameManagerActions
 from ..types import AgentStage, RewardMode
 
 
@@ -35,11 +35,11 @@ class EpisodeStats:
             return sum(self.losses) / len(self.losses)
         return np.inf
 
-    def add_invalid_action(self, action: AllActions):
+    def add_invalid_action(self, action: AllActions|GameManagerActions):
         self.invalid_action_counts.setdefault(action.name, 0)
         self.invalid_action_counts[action.name] += 1
 
-    def add_valid_action(self, action: AllActions):
+    def add_valid_action(self, action: AllActions|GameManagerActions):
         self.valid_action_counts.setdefault(action.name, 0)
         self.valid_action_counts[action.name] += 1
 
