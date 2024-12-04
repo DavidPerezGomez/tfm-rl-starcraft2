@@ -58,10 +58,9 @@ MAP_CONFIGS = dict(
             sc2_env.Agent(sc2_env.Race.terran),
             # sc2_env.Bot(sc2_env.Race.random, sc2_env.Difficulty.very_easy),
         ],
-        # available_actions=list(AllActions),
-        available_actions=list(BaseManagerActions) + [AllActions.BUILD_BARRACKS],
+        available_actions=list(AllActions),
         # Baseline reward of 100
-        get_score_method="get_num_marines_difference",
+        get_score_method="get_game_score_delta",
     ),
     CollectMineralsAndGas=dict(
         map_name="CollectMineralsAndGas",
@@ -91,7 +90,7 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(BaseManagerActions),
-        get_score_method="get_reward_as_score",
+        get_score_method="get_mineral_count_delta",
     ),
     CollectMineralsFixed=dict(
         map_name="CollectMineralsFixed",
@@ -105,7 +104,7 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(BaseManagerActions),
-        get_score_method="get_reward_as_score",
+        get_score_method="get_mineral_count_delta",
     ),
     BuildMarinesRandom=dict(
         map_name="BuildMarinesRandom",
