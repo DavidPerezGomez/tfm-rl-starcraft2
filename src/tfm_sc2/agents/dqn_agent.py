@@ -48,6 +48,7 @@ class DQNAgent(BaseAgent):
         self.epsilon = hyperparams.epsilon
         self.loss = self.hyperparams.loss or torch.nn.HuberLoss()
         self._random_mode = random_mode
+        self._burnin = False
 
         # Placeholders
         self._action_to_idx = None
@@ -63,14 +64,25 @@ class DQNAgent(BaseAgent):
             target_net_updated=False,
         ))
 
-        if self._checkpoint_path is not None:
-            self._main_network_path = self._checkpoint_path / self._MAIN_NETWORK_FILE
-            self._target_network_path = self._checkpoint_path / self._TARGET_NETWORK_FILE
-            self._buffer_path = self._checkpoint_path / self._BUFFER_FILE
-        else:
-            self._main_network_path = None
-            self._target_network_path = None
-            self._buffer_path = None
+    def burnin(self):
+        """Set the agent in burnin mode."""
+        self._train = True
+        self._burnin = True
+        self._exploit = False
+
+    @override
+    def train(self):
+        """Set the agent in training mode."""
+        self._train = True
+        self._burnin = False
+        self._exploit = False
+
+    @override
+    def exploit(self):
+        """Set the agent in training mode."""
+        self._train = False
+        self._burnin = False
+        self._exploit = True
 
     @property
     def _collect_stats(self) -> bool:
