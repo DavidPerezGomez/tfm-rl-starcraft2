@@ -139,6 +139,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         if checkpoint_path is None:
             raise RuntimeError(f"No checkpoint path was provided to save")
 
+        if not checkpoint_path.exists():
+            checkpoint_path.mkdir(parents=True, exist_ok=True)
+
         agent_attrs = self._get_agent_attrs()
         agent_path = checkpoint_path / self._AGENT_FILE
 
