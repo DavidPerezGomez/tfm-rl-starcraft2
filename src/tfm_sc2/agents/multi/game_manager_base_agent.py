@@ -61,6 +61,9 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
     @override
     def reset(self, **kwargs):
         super().reset()
+        self._base_manager.reset()
+        self._army_recruit_manager.reset()
+        self._army_attack_manager.reset()
         self._proxy_agent = None
         self._prev_proxy_agent = None
         self._current_game_manager_action = None
