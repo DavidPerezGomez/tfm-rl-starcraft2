@@ -666,11 +666,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
         marines_health = sum([u.health for u in marines])
 
-        return marines_health - (buildings_health + workers_health + army_health)
+        return marines_health * 1.1 - (buildings_health + workers_health + army_health)
 
     def get_health_difference_score_delta(self, obs: TimeStep) -> float:
-        factor = 0.1
-        step_cost = 1
+        step_cost = 5
         health_difference_score = self.get_health_difference_score()
         if obs.first():
             self._prev_health_difference_score = health_difference_score
@@ -679,7 +678,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             prev = self._prev_health_difference_score
             delta = health_difference_score - prev
             self._prev_health_difference_score = health_difference_score
-            return delta * factor - step_cost
+            return delta - step_cost
 
     def get_reward_as_score(self, obs: TimeStep) -> float:
         return obs.reward
