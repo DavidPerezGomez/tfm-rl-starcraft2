@@ -186,7 +186,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             all_episode_stats = [v for v in self._episode_stats.values()]
             all_episode_stats = reduce(lambda v1, v2: v1 + v2, all_episode_stats)
             episode_stats_pd = pd.DataFrame(data=all_episode_stats)
-            episode_stats_pd = _add_dummy_action(episode_stats_pd, ["invalid_action_counts", "valid_action_counts"])
+            if any(episode_stats_pd):
+                episode_stats_pd = _add_dummy_action(episode_stats_pd, ["invalid_action_counts", "valid_action_counts"])
             episode_stats_pd.to_parquet(checkpoint_path / "episode_stats.parquet")
             self.logger.info(f"Saved episode stats to {checkpoint_path}")
         except Exception as error:
@@ -807,26 +808,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         # if not self._exploit:
         if obs.last():
-            emissions = self._tracker.flush() if self._tracker is not None else 0.
-            self.logger.debug(f"End of episode - Got extra {emissions} since last update")
-            self._current_episode_stats.emissions += emissions
-            self._current_episode_stats.is_training = self.is_training
-            self._current_episode_stats.is_exploit = self._exploit
-            self._current_episode_stats.final_stage = self._current_agent_stage().name
-            self._tracker_last_update = time.time()
-            episode_stage = self._current_episode_stats.initial_stage
-            mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_mode=self._reward_mode, last_n=5)
-            max_mean_rewards = self._best_mean_rewards
-            max_mean_rewards_str = f"{max_mean_rewards:.2f}" if max_mean_rewards is not None else "None"
-            new_max_mean_rewards = (max_mean_rewards is None) or (mean_rewards >= max_mean_rewards)
-
-            self.current_agent_stats.process_episode(self._current_episode_stats)
-            self.current_aggregated_episode_stats.process_episode(self._current_episode_stats)
-            self._episode_stats[self._map_name].append(self._current_episode_stats)
-            log_msg_parts = ["\n=================", "================="] + self._get_end_of_episode_info_components() + ["=================", "================="]
-            log_msg = "\n".join(log_msg_parts)
-            self.logger.info(log_msg)
-
+            self._store_episode_stats()
         else:
             now = time.time()
             if (self._tracker is not None) and (now - self._tracker_last_update > self._tracker_update_freq_seconds):
@@ -837,10 +819,33 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         self._current_obs_unit_info = None
 
+    def _store_episode_stats(self):
+        emissions = self._tracker.flush() if self._tracker is not None else 0.
+        self.logger.debug(f"End of episode - Got extra {emissions} since last update")
+        self._current_episode_stats.emissions += emissions
+        self._current_episode_stats.is_training = self.is_training
+        self._current_episode_stats.is_exploit = self._exploit
+        self._current_episode_stats.final_stage = self._current_agent_stage().name
+        self._tracker_last_update = time.time()
+        episode_stage = self._current_episode_stats.initial_stage
+        mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage,
+                                                                          reward_mode=self._reward_mode, last_n=5)
+        max_mean_rewards = self._best_mean_rewards
+        max_mean_rewards_str = f"{max_mean_rewards:.2f}" if max_mean_rewards is not None else "None"
+        new_max_mean_rewards = (max_mean_rewards is None) or (mean_rewards >= max_mean_rewards)
+
+        self.current_agent_stats.process_episode(self._current_episode_stats)
+        self.current_aggregated_episode_stats.process_episode(self._current_episode_stats)
+        self._episode_stats[self._map_name].append(self._current_episode_stats)
+        log_msg_parts = ["\n=================", "================="] + self._get_end_of_episode_info_components() + [
+            "=================", "================="]
+        log_msg = "\n".join(log_msg_parts)
+        self.logger.info(log_msg)
+
     def _get_end_of_episode_info_components(self) -> List[str]:
         num_invalid = sum(self._current_episode_stats.invalid_action_counts.values())
         num_valid = sum(self._current_episode_stats.valid_action_counts.values())
-        pct_invalid = num_invalid / (num_invalid + num_valid)
+        pct_invalid = num_invalid / (num_invalid + num_valid) if num_invalid + num_valid > 0 else 0
         episode_stage = self._current_episode_stats.initial_stage
         mean_rewards = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, reward_mode=RewardMode.REWARD)
         mean_rewards_10 = self.current_aggregated_episode_stats.mean_rewards(stage=episode_stage, last_n=10, reward_mode=RewardMode.REWARD)

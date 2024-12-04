@@ -96,7 +96,7 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
 
     @override
     def pre_step(self, obs: TimeStep, eval_step: bool = True):
-        self._take_step = obs.first() or self._completed_episode_steps % self._time_displacement == 0
+        self._take_step = obs.first() or obs.last() or self._completed_episode_steps % self._time_displacement == 0
 
         if self._take_step:
             super().pre_step(obs, eval_step)
@@ -115,7 +115,6 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
     def update_barracks_positions(self):
         if self._take_step:
             super().update_barracks_positions()
-
 
     @override
     def step(self, obs: TimeStep, **kwargs):
@@ -140,18 +139,6 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
 
         action, action_args, is_valid_action = self._proxy_agent.select_action(obs=obs)
 
-        # if action == AllActions.NO_OP:
-        #     self.logger.debug(f"Proxy manager for action {game_manager_action.name} returned a no-op, selecting a different action...")
-        #     available_actions = [a for a in self._available_actions if a != game_manager_action]
-        #     game_manager_action = self.select_action(obs, valid_actions=available_actions)
-        #
-        #     action, action_args, is_valid_action, proxy_manager = self.forward_action(obs=obs, action=game_manager_action)
-        #     if action == AllActions.NO_OP:
-        #         self.logger.debug(f"Proxy manager for action {game_manager_action.name} also returned a no-op, selecting the remaining action...")
-        #         available_actions = [a for a in available_actions if a != game_manager_action]
-        #         game_manager_action = available_actions[0]
-        #         action, action_args, is_valid_action, proxy_manager = self.forward_action(obs=obs, action=game_manager_action)
-
         original_action = action
         original_action_args = action_args
         if not is_valid_action:
@@ -164,8 +151,14 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
             self.logger.debug(f"[Step {self.steps}] Manager action: {self._current_game_manager_action.name} // Sub-agent action {action.name} (original action = {original_action})")
 
         self.post_step(obs, self._current_game_manager_action, None, self._current_game_manager_action, None, True)
-        if not obs.last():
-            self._proxy_agent.post_step(obs, action, action_args, original_action, original_action_args, is_valid_action)
+        self._proxy_agent.post_step(obs, action, action_args, original_action, original_action_args, is_valid_action)
+        if obs.last():
+            if self._proxy_agent != self._base_manager:
+                self._base_manager._store_episode_stats()
+            if self._proxy_agent != self._army_recruit_manager:
+                self._army_recruit_manager._store_episode_stats()
+            if self._proxy_agent != self._army_attack_manager:
+                self._army_attack_manager._store_episode_stats()
         self._prev_proxy_agent = self._proxy_agent
 
         game_action = self._action_to_game[action]
