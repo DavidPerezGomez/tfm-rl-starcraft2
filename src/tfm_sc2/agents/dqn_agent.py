@@ -1,7 +1,5 @@
 import pickle
-from collections import namedtuple
-from copy import copy, deepcopy
-from dataclasses import dataclass
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple, Union
 
@@ -88,20 +86,9 @@ class DQNAgent(BaseAgent):
     def _collect_stats(self) -> bool:
         return not (self.is_burnin or self._random_mode)
 
-    def _update_checkpoint_paths(self):
-        super()._update_checkpoint_paths()
-        if self.checkpoint_path is None:
-            self._main_network_path = None
-            self._target_network_path = None
-            self._buffer_path = None
-        else:
-            self._main_network_path = self.checkpoint_path / self._MAIN_NETWORK_FILE
-            self._target_network_path = self.checkpoint_path / self._TARGET_NETWORK_FILE
-            self._buffer_path = self.checkpoint_path / self._BUFFER_FILE
-
     @classmethod
     def _extract_init_arguments(cls, checkpoint_path: Path, agent_attrs: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        parent_attrs = super()._extract_init_arguments(checkpoint_path=checkpoint_path, agent_attrs=agent_attrs, **kwargs)
+        parent_attrs = super()._extract_init_arguments(agent_attrs=agent_attrs, **kwargs)
         main_network_path = checkpoint_path / cls._MAIN_NETWORK_FILE
         target_network_path = checkpoint_path / cls._TARGET_NETWORK_FILE
         return dict(
@@ -136,13 +123,17 @@ class DQNAgent(BaseAgent):
 
     def save(self, checkpoint_path: Union[str|Path] = None):
         super().save(checkpoint_path=checkpoint_path)
-        torch.save(self.main_network, self._main_network_path)
-        torch.save(self.target_network, self._target_network_path)
+        main_network_path = checkpoint_path / self._MAIN_NETWORK_FILE
+        target_network_path = checkpoint_path / self._TARGET_NETWORK_FILE
+        torch.save(self.main_network, main_network_path)
+        torch.save(self.target_network, target_network_path)
+
+        buffer_path = checkpoint_path / self._BUFFER_FILE
 
         if self._buffer is not None:
-            with open(self._buffer_path, "wb") as f:
+            with open(buffer_path, "wb") as f:
                 pickle.dump(self._buffer, f)
-                self.logger.info(f"Saved memory replay buffer to {self._buffer_path}")
+                self.logger.info(f"Saved memory replay buffer to {buffer_path}")
 
     @classmethod
     def load(cls, checkpoint_path: Union[str|Path], map_name: str, map_config: Dict, buffer: ExperienceReplayBuffer = None, **kwargs) -> Self:
@@ -150,11 +141,6 @@ class DQNAgent(BaseAgent):
         agent_attrs_file = checkpoint_path / cls._AGENT_FILE
         with open(agent_attrs_file, mode="rb") as f:
             agent_attrs = pickle.load(f)
-
-        if "main_network_path" in agent_attrs:
-            agent_attrs["main_network_path"] = checkpoint_path / cls._MAIN_NETWORK_FILE
-        if "target_network_path" in agent_attrs:
-            agent_attrs["target_network_path"] = checkpoint_path / cls._TARGET_NETWORK_FILE
 
         if buffer is not None:
             agent_attrs["buffer"] = buffer
@@ -205,7 +191,7 @@ class DQNAgent(BaseAgent):
 
     @property
     def is_burnin(self):
-        return super().is_training and self._buffer.burn_in_capacity < 1
+        return self._burnin
 
 
     def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any], bool]:

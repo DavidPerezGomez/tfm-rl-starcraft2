@@ -5,7 +5,7 @@ import time
 from abc import ABC, abstractmethod
 from functools import reduce
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -49,7 +49,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
     def __init__(self,
                  map_name: str, map_config: Dict,
-                 train: bool = True, action_masking: bool = False, checkpoint_path: Union[str|Path] = None, tracker_update_freq_seconds: int = 10,
+                 train: bool = True, action_masking: bool = False, tracker_update_freq_seconds: int = 10,
                  reward_mode: RewardMode = RewardMode.REWARD, score_method: str = "get_reward_as_score",
                  **kwargs):
         super().__init__(**kwargs)
@@ -101,18 +101,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._num_actions = None
         self._best_mean_rewards = None
 
-        if checkpoint_path is not None:
-            self._checkpoint_path = Path(checkpoint_path)
-            self._checkpoint_path.mkdir(exist_ok=True, parents=True)
-            self._agent_path = self._checkpoint_path / self._AGENT_FILE
-            self._stats_path = self._checkpoint_path / self._STATS_FILE
-        else:
-            self._checkpoint_path = None
-            self._main_network_path = None
-            self._target_network_path = None
-            self._agent_path = None
-            self._stats_path = None
-
         self._status_flags = dict(
             train_started=False,
             exploit_started=False,
@@ -147,37 +135,18 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def current_aggregated_episode_stats(self) -> AggregatedEpisodeStats:
         return self._aggregated_episode_stats[self._map_name]
 
-    @property
-    def checkpoint_path(self) -> Optional[Path]:
-        return self._checkpoint_path
-
-    @checkpoint_path.setter
-    def checkpoint_path(self, checkpoint_path: Union[str|Path]):
-        checkpoint_path = Path(checkpoint_path)
-        self._checkpoint_path = checkpoint_path
-        self._update_checkpoint_paths()
-
-    def _update_checkpoint_paths(self):
-        if self.checkpoint_path is None:
-            self._agent_path = None
-            self._stats_path = None
-        else:
-            self._agent_path = self.checkpoint_path / self._AGENT_FILE
-            self._stats_path = self.checkpoint_path / self._STATS_FILE
-
     def save(self, checkpoint_path: Union[str|Path] = None):
-        if checkpoint_path is not None:
-            self.checkpoint_path = checkpoint_path
-        elif self.checkpoint_path is None:
-            raise RuntimeError(f"The agent's checkpoint path is None, and no checkpoint path was provided to 'save'. Please provide one of the two.")
+        if checkpoint_path is None:
+            raise RuntimeError(f"No checkpoint path was provided to save")
 
         agent_attrs = self._get_agent_attrs()
+        agent_path = checkpoint_path / self._AGENT_FILE
 
-        with open(self._agent_path, "wb") as f:
+        with open(agent_path, "wb") as f:
             pickle.dump(agent_attrs, f)
-            self.logger.info(f"Saved agent attributes to {self._agent_path}")
+            self.logger.info(f"Saved agent attributes to {agent_path}")
 
-        self.save_stats(self.checkpoint_path)
+        self.save_stats(checkpoint_path)
 
     @classmethod
     def load(cls, checkpoint_path: Union[str|Path], map_name: str, map_config: Dict, **kwargs) -> Self:
@@ -186,7 +155,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         with open(agent_attrs_file, mode="rb") as f:
             agent_attrs = pickle.load(f)
 
-        init_attrs = cls._extract_init_arguments(checkpoint_path=checkpoint_path, agent_attrs=agent_attrs, map_name=map_name, map_config=map_config)
+        init_attrs = cls._extract_init_arguments(agent_attrs=agent_attrs, map_name=map_name, map_config=map_config)
         agent = cls(**init_attrs, **kwargs)
         agent._load_agent_attrs(agent_attrs)
 
@@ -202,10 +171,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         return agent
 
     def save_stats(self, checkpoint_path: Union[str|Path] = None):
-        if checkpoint_path is not None:
-            self.checkpoint_path = checkpoint_path
-        elif self.checkpoint_path is None:
-            raise RuntimeError(f"The agent's checkpoint path is None, and no checkpoint path was provided to 'save'. Please provide one of the two.")
+        if checkpoint_path is None:
+            raise RuntimeError(f"No checkpoint path was provided to save")
 
         def _add_dummy_action(stats, count_cols):
             for count_col in count_cols:
@@ -217,8 +184,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             all_episode_stats = reduce(lambda v1, v2: v1 + v2, all_episode_stats)
             episode_stats_pd = pd.DataFrame(data=all_episode_stats)
             episode_stats_pd = _add_dummy_action(episode_stats_pd, ["invalid_action_counts", "valid_action_counts"])
-            episode_stats_pd.to_parquet(self._checkpoint_path / "episode_stats.parquet")
-            self.logger.info(f"Saved episode stats to {self._checkpoint_path}")
+            episode_stats_pd.to_parquet(checkpoint_path / "episode_stats.parquet")
+            self.logger.info(f"Saved episode stats to {checkpoint_path}")
         except Exception as error:
             self.logger.error(f"Error saving episode stats")
             self.logger.exception(error)
@@ -229,8 +196,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             agent_stats_pd = _add_dummy_action(
                 agent_stats_pd,
                 ["invalid_action_counts", "valid_action_counts", "invalid_action_counts_per_stage", "valid_action_counts_per_stage"])
-            agent_stats_pd.to_parquet(self._checkpoint_path / "agent_stats.parquet")
-            self.logger.info(f"Saved agent stats to {self._checkpoint_path}")
+            agent_stats_pd.to_parquet(checkpoint_path / "agent_stats.parquet")
+            self.logger.info(f"Saved agent stats to {checkpoint_path}")
         except Exception as error:
             self.logger.error(f"Error saving agent stats")
             self.logger.exception(error)
@@ -241,16 +208,15 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             aggregated_stats_pd = _add_dummy_action(
                 aggregated_stats_pd,
                 ["invalid_action_counts", "valid_action_counts", "invalid_action_counts_per_stage", "valid_action_counts_per_stage"])
-            aggregated_stats_pd.to_parquet(self._checkpoint_path / "aggregated_stats.parquet")
-            self.logger.info(f"Saved aggregated stats to {self._checkpoint_path}")
+            aggregated_stats_pd.to_parquet(checkpoint_path / "aggregated_stats.parquet")
+            self.logger.info(f"Saved aggregated stats to {checkpoint_path}")
         except Exception as error:
             self.logger.error(f"Error saving aggregated stats")
             self.logger.exception(error)
 
     @classmethod
-    def _extract_init_arguments(cls, checkpoint_path: Path, agent_attrs: Dict[str, Any], map_name: str, map_config: Dict) -> Dict[str, Any]:
+    def _extract_init_arguments(cls, agent_attrs: Dict[str, Any], map_name: str, map_config: Dict) -> Dict[str, Any]:
         return dict(
-            checkpoint_path=checkpoint_path,
             map_name=map_name,
             map_config=map_config,
             train=agent_attrs["train"],
@@ -261,7 +227,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._train = agent_attrs["train"]
         self._exploit = agent_attrs.get("exploit", not self._train)
         self._action_masking = agent_attrs["action_masking"]
-        self.checkpoint_path = agent_attrs["checkpoint_path"]
         self._agent_stats = agent_attrs["agent_stats"]
         self._episode_stats = agent_attrs["episode_stats"]
         self._aggregated_episode_stats = agent_attrs["aggregated_episode_stats"]
@@ -271,8 +236,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self.steps = agent_attrs["steps"]
         self.obs_spec = agent_attrs["obs_spec"]
         self.action_spec = agent_attrs["action_spec"]
-        self._reward_mode = agent_attrs.get("reward_mode", agent_attrs.get("reward_method", RewardMode.REWARD))
-        self._score_method = agent_attrs.get("score_method", "get_reward_as_score")
+        self._reward_mode = agent_attrs["reward_mode"]
+        self._score_method = agent_attrs["score_method"]
         # From WithLogger
         self._log_name = agent_attrs["log_name"]
         if self.logger.name != self._log_name:
@@ -283,9 +248,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             train=self._train,
             exploit=self._exploit,
             action_masking=self._action_masking,
-            checkpoint_path=self.checkpoint_path,
-            agent_path=self._agent_path,
-            stats_path=self._stats_path,
             agent_stats=self._agent_stats,
             episode_stats=self._episode_stats,
             aggregated_episode_stats=self._aggregated_episode_stats,
@@ -296,6 +258,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             obs_spec=self.obs_spec,
             action_spec=self.action_spec,
             reward_mode=self._reward_mode,
+            score_method=self._score_method,
             # From logger
             log_name=self._log_name,
         )
@@ -861,14 +824,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             log_msg = "\n".join(log_msg_parts)
             self.logger.info(log_msg)
 
-            # if (self.is_training) and (self.checkpoint_path is not None) and new_max_mean_rewards:
-            #     self.logger.info(f"New max reward during training ({max_mean_rewards_str} -> {mean_rewards:.2f}). Saving best agent...")
-            #     checkpoint_path = self.checkpoint_path
-            #     save_path = self.checkpoint_path / "best_agent"
-            #     save_path.mkdir(exist_ok=True, parents=True)
-            #     self.save(checkpoint_path=save_path)
-            #     self.checkpoint_path = checkpoint_path
-            #     self._best_mean_rewards = mean_rewards
         else:
             now = time.time()
             if (self._tracker is not None) and (now - self._tracker_last_update > self._tracker_update_freq_seconds):
