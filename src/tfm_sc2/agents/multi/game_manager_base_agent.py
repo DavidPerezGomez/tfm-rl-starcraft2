@@ -195,6 +195,6 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
     @override
     def save(self, checkpoint_path: Union[str|Path] = None):
         super().save(checkpoint_path)
-        self._base_manager.save(self.checkpoint_path / "base_manager")
-        self._army_recruit_manager.save(self.checkpoint_path / "army_recruit_manager")
-        self._army_attack_manager.save(self.checkpoint_path / "army_attack_manager")
+        self._base_manager.save(checkpoint_path / "base_manager")
+        self._army_recruit_manager.save(checkpoint_path / "army_recruit_manager")
+        self._army_attack_manager.save(checkpoint_path / "army_attack_manager")
