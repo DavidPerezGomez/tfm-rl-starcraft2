@@ -1,4 +1,3 @@
-import random
 from typing import Any, Dict, Tuple
 
 from pysc2.env.environment import TimeStep
@@ -10,28 +9,34 @@ from ..dqn_agent import DQNAgent
 
 FUNCTIONS = actions.FUNCTIONS
 RAW_FUNCTIONS = actions.RAW_FUNCTIONS
-from ...actions import GameManagerActions
 from .game_manager_base_agent import GameManagerBaseAgent
 
 
 class GameManagerDQNAgent(GameManagerBaseAgent, DQNAgent):
 
-    def _select_game_manager_action(self, obs: TimeStep) -> GameManagerActions:
-        return random.choice(self.agent_actions)
+    @override
+    def burnin(self):
+        super().burnin()
+        if hasattr(self._base_manager, "burnin") and callable(getattr(self._base_manager, "burning")):
+            self._base_manager.burnin()
+        if hasattr(self._army_recruit_manager, "burnin") and callable(getattr(self._army_recruit_manager, "burning")):
+            self._army_recruit_manager.burnin()
+        if hasattr(self._army_attack_manager, "burnin") and callable(getattr(self._army_attack_manager, "burning")):
+            self._army_attack_manager.burnin()
 
     @override
     @property
     def memory_replay_ready(self) -> bool:
         return super().memory_replay_ready \
-                and self._base_manager.memory_replay_ready \
-                and self._army_attack_manager.memory_replay_ready \
-                and self._army_recruit_manager.memory_replay_ready \
+                and (not hasattr(self._base_manager, "memory_replay_ready") or self._base_manager.memory_replay_ready) \
+                and (not hasattr(self._army_attack_manager, "memory_replay_ready") or self._army_attack_manager.memory_replay_ready) \
+                and (not hasattr(self._army_recruit_manager, "memory_replay_ready") or self._army_recruit_manager.memory_replay_ready) \
 
     def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any]]:
         valid_actions = self._available_actions
         if valid_actions is not None:
             valid_actions = self._actions_to_network(valid_actions)
-        if (self._random_mode) or (self._train and (self._buffer.burn_in_capacity < 1)):
+        if (self._random_mode) or (self._train and self._burnin):
             if not self._status_flags["burnin_started"]:
                 self.logger.info(f"Starting burn-in")
                 self._status_flags["burnin_started"] = True
