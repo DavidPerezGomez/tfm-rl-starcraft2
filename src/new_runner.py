@@ -362,7 +362,8 @@ def _create_dqn(cls = None, config_section = None, log_name: str = None):
 
     obs_input_shape = len(State._fields)
     learning_rate = _CONFIG.getfloat(config_section, "lr")
-    lr_milestones = [int(n) for n in _CONFIG.get(config_section, "lr_milestones").split(",")]
+    str_lr_milestones = _CONFIG.get(config_section, "lr_milestones").split(",")
+    lr_milestones = [int(n) for n in str_lr_milestones] if any(str_lr_milestones) else []
     dqn = DQNNetwork(model_layers=model_layers,
                      observation_space_shape=obs_input_shape,
                      num_actions=num_actions,
@@ -672,10 +673,8 @@ def main(argv):
     FLAGS = flags.FLAGS
     mode = FLAGS.mode
     config_files = FLAGS.config_files
-    print(mode)
-    print(config_files)
 
-    print(_CONFIG.read(config_files))
+    _CONFIG.read(config_files)
     flags.FLAGS(["new_runner"])
 
     _setup_logging(_CONFIG.get(mode, "log_file"))
