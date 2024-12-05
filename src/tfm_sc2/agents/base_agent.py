@@ -573,9 +573,16 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         min_distance = distances.min()
         min_distances = np.where(distances == min_distance)[0]
         # If there is only one minimum distance, that will be returned, otherwise we return one of the elements with the minimum distance
-
-        closes_unit_idx = np.random.choice(min_distances)
-        return units[closes_unit_idx], min_distance
+        # the chosen element shouldn't be random because it can cause alternating targets when the position and units are static
+        if len(min_distances) == 1:
+            closes_unit_idx = min_distances[0]
+            return units[closes_unit_idx], min_distance
+        else:
+            closest_units = [units[d] for d in min_distances]
+            tags = np.array([int(u.tag) for u in closest_units])
+            max_tag = tags.max()
+            closes_unit_idx = np.where(tags == max_tag)[0][0]
+            return closest_units[closes_unit_idx], min_distance
 
     def get_reward_and_score(self, obs: TimeStep, eval_step: bool = True) -> Tuple[float, float, float]:
         reward = obs.reward
