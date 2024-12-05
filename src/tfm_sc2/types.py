@@ -121,11 +121,11 @@ State = namedtuple('State',
                                 "score_cumulative_total_value_units", "score_cumulative_total_value_structures",
                                 "score_cumulative_killed_value_units", "score_cumulative_killed_value_structures",
                                 # By category
-                                "score_food_used_none", "score_food_used_army", "score_food_used_economy",
-                                "score_used_minerals_none", "score_used_minerals_army", "score_used_minerals_economy", "score_used_minerals_technology",
+                                "score_food_used_army", "score_food_used_economy",
+                                "score_used_minerals_army", "score_used_minerals_economy", "score_used_minerals_technology",
                                 # Score by vital
-                                "score_by_vital_total_damage_dealt_life",
-                                "score_by_vital_total_damage_taken_life",
+                                "damage_dealt_delta",
+                                "damage_taken_delta",
                                 # Neutral units
                                 "num_minerals",
                                 # Enemy info

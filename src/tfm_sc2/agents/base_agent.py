@@ -90,6 +90,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._current_state_tuple = None
         self._prev_state_tuple = None
         self._current_obs_unit_info = None
+        self._prev_total_damage_dealt = 0
+        self._prev_total_damage_taken = 0
         self._prev_minerals = 0
         self._prev_army_spending = 0
         self._prev_diff_marines = 0
@@ -310,6 +312,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._available_actions = None
         self._current_state_tuple = None
         self._current_obs_unit_info = None
+        self._prev_total_damage_dealt = 0
+        self._prev_total_damage_taken = 0
         self._prev_minerals = 0
         self._prev_army_spending = 0
         self._prev_diff_marines = 0
@@ -1338,25 +1342,26 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         )
 
     def _get_scores_state(self, obs: TimeStep)     -> Dict[str, int|float]:
-        return {
+        scores_state = {
             "score_cumulative_score": obs.observation.score_cumulative.score,
             "score_cumulative_total_value_units": obs.observation.score_cumulative.total_value_units,
             "score_cumulative_total_value_structures": obs.observation.score_cumulative.total_value_structures,
             "score_cumulative_killed_value_units": obs.observation.score_cumulative.killed_value_units,
             "score_cumulative_killed_value_structures": obs.observation.score_cumulative.killed_value_structures,
             # Supply (food) scores
-            "score_food_used_none": obs.observation.score_by_category.food_used.none,
             "score_food_used_army": obs.observation.score_by_category.food_used.army,
             "score_food_used_economy": obs.observation.score_by_category.food_used.economy,
             # Used minerals and vespene
-            "score_used_minerals_none": obs.observation.score_by_category.used_minerals.none,
             "score_used_minerals_army": obs.observation.score_by_category.used_minerals.army,
             "score_used_minerals_economy": obs.observation.score_by_category.used_minerals.economy,
             "score_used_minerals_technology": obs.observation.score_by_category.used_minerals.technology,
             # Score by vital
-            "score_by_vital_total_damage_dealt_life": obs.observation.score_by_vital.total_damage_dealt.life,
-            "score_by_vital_total_damage_taken_life": obs.observation.score_by_vital.total_damage_taken.life,
+            "damage_dealt_delta": obs.observation.score_by_vital.total_damage_dealt.life - self._prev_total_damage_dealt,
+            "damage_taken_delta": obs.observation.score_by_vital.total_damage_taken.life - self._prev_total_damage_taken,
         }
+        self._prev_total_damage_dealt = obs.observation.score_by_vital.total_damage_dealt.life
+        self._prev_total_damage_taken = obs.observation.score_by_vital.total_damage_taken.life
+        return scores_state
 
     def _get_neutral_units_state(self) -> Dict[str, int|float]:
         minerals = [unit for unit in self._get_units(alliances=PlayerRelative.NEUTRAL) if Minerals.contains(unit.unit_type)]
