@@ -1,22 +1,21 @@
 #!/bin/bash
 
-#lr_list=( 0.001 0.005 )
-#gamma_list=( 0.85 0.95 0.9995 )
-#decay_list=( 0.89 0.832 )
-#i=1
+if [ -z "${SRC_DIR}" ]; then echo "Environmental variable SRC_DIR needs to be configured. Check the README for more info."; exit 1; fi
 
-#for lr in ${lr_list[@]};  do
-#  for d in ${decay_list[@]};  do
-#    for g in ${gamma_list[@]};  do
+cd "${SRC_DIR}"
 
-  #      if [ $i -eq 1 ]; then echo "skipping"; continue; fi
+conf_list=( 01 02 03 04 05 06 07 )
 
-      MODEL_SUBDIR="single_2024-12-02_6"
+for i in ${conf_list[@]};  do
 
-      ./param_train_single.sh $MODEL_SUBDIR 0.005 0.9995
-      ./param_exploit_single.sh $MODEL_SUBDIR
+  CONFIG_FILES="conf/default.ini, conf/attack_manager.ini, conf/grid_search/${i}.ini"
 
-#      i=$(($i+1))
-#    done
-#  done
-#done
+  python "${SRC_DIR}"/new_runner.py \
+        --mode "train" \
+        --config_files "${CONFIG_FILES}"
+
+  python "${SRC_DIR}"/new_runner.py \
+        --mode "exploit" \
+        --config_files "${CONFIG_FILES}"
+
+done
