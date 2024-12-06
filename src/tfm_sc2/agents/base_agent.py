@@ -698,10 +698,14 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         damaged_unit_min_factor = 0.5
         unit_in_progress_factor = 0.25
 
+        def get_unit_factor(unit):
+            if self.is_complete(unit):
+                return max(damaged_unit_min_factor, unit.health_ratio / 255)
+            else:
+                return unit_in_progress_factor
+
         def get_units_value(units, unit_cost: SC2Costs):
-            return sum([(max(damaged_unit_min_factor, u.health_ratio / 255) * unit_cost.minerals) if self.is_complete(u)
-                        else (unit_in_progress_factor * unit_cost.minerals)
-                        for u in units])
+            return sum([unit_cost.minerals * get_unit_factor(u) for u in units])
 
         def get_player_score(player: PlayerRelative):
             command_centers = self._get_units(alliances=player, unit_types=units.Terran.CommandCenter)
@@ -709,16 +713,16 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             barracks = self._get_units(alliances=player, unit_types=units.Terran.Barracks)
             marines = self._get_units(alliances=player, unit_types=units.Terran.Marine)
             workers = self._get_units(alliances=player, unit_types=units.Terran.SCV)
-            marines_in_progress = sum([cc.order_length for cc in command_centers])
-            workers_in_progress = sum([b.order_length for b in barracks])
+            workers_in_progress = sum([cc.order_length for cc in command_centers])
+            marines_in_progress = sum([b.order_length for b in barracks])
 
             return get_units_value(command_centers, SC2Costs.COMMAND_CENTER) \
                     + get_units_value(supply_depots, SC2Costs.SUPPLY_DEPOT) \
                     + get_units_value(barracks, SC2Costs.BARRACKS) \
                     + get_units_value(marines, SC2Costs.MARINE) \
-                    + marines_in_progress * unit_in_progress_factor \
+                    + marines_in_progress * SC2Costs.MARINE.minerals * unit_in_progress_factor \
                     + get_units_value(workers, SC2Costs.SCV) \
-                    + workers_in_progress * unit_in_progress_factor
+                    + workers_in_progress * SC2Costs.SCV.minerals * unit_in_progress_factor
 
         ally_score = get_player_score(PlayerRelative.SELF)
         enemy_score = get_player_score(PlayerRelative.ENEMY)
