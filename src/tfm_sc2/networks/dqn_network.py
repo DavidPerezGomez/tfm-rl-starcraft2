@@ -41,23 +41,26 @@ class DQNNetwork(WithLogger, nn.Module, ABC):
 
         self.add_optimizer(learning_rate, lr_milestones)
 
-
     def add_optimizer(self, learning_rate: float, lr_milestones: list[int] = None):
         optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
         if lr_milestones is not None and any(lr_milestones):
             scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=0.1)
         else:
-            scheduler = None
+            scheduler = optim.lr_scheduler.ConstantLR(optimizer, factor=1, total_iters=0)
 
         self.optimizer = optimizer
         self.scheduler = scheduler
 
+    @property
+    def learning_rate(self):
+        return self.scheduler.get_last_lr()
 
     def step(self):
         self.optimizer.step()
-        if self.scheduler is not None:
-            self.scheduler.step() # Apply the gradients to the main network
+
+    def step_lr(self):
+        self.scheduler.step()
 
     def _get_model_layers_from_number_of_units(self, layer_units: List[int], num_inputs: int, num_outputs: int):
         layer_units = layer_units or self.DEFAULT_LAYER_UNITS
@@ -111,6 +114,7 @@ class DQNNetwork(WithLogger, nn.Module, ABC):
         Returns:
             int: Action selected.
         """
+        self.logger.debug(f"Selecting action with epsilon {epsilon}.")
         if np.random.random() < epsilon:
             action = self.get_random_action(valid_actions=valid_actions)
         else:
