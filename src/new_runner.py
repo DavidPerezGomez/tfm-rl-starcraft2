@@ -206,32 +206,32 @@ def _run_episodes(main_agent, other_agents, mode):
                         logger.debug(f"Step performed in {(step_t2 - step_t1) * 1000:-2f}ms")
 
                         episode_ended = timesteps[0].last()
-                        if episode_ended:
-                            finished_episodes += 1
-                            t1 = time.time()
-                            t_delta = t1 - t0
-                            logger.info(
-                                f"Episode {finished_episodes}/{num_episodes} completed in {t_delta:.2f} seconds ({t_delta / 60:.2f} minutes)")
-                            logger.info(
-                                f"Total time calculating actions: {total_time_actions:.2f}s ({(total_time_actions / n_steps) * 1000} ms/step)")
-                            logger.info(
-                                f"Total time performing steps: {total_time_steps:.2f}s ({(total_time_steps / n_steps) * 1000} ms/step)")
 
-                            # Perform one last step to process rewards etc
-                            last_step_actions = [a.step(timestep) for a, timestep in zip([main_agent, *other_agents], timesteps)]
+                    # Perform one last step to process rewards etc
+                    last_step_actions = [a.step(timestep) for a, timestep in zip([main_agent, *other_agents], timesteps)]
 
-                            if other_agents:
-                                if timesteps[0].reward > 0:
-                                    num_wins += 1
-                                elif timesteps[0].reward < 0:
-                                    num_losses += 1
-                                else:
-                                    num_draws += 1
-                                logger.info(f"Main agent results: [{num_wins}/{num_draws}/{num_losses}]")
-                                win_rate = 100 * num_wins / finished_episodes
-                                logger.info(f"Win rate for main agent: {win_rate:.2f}%")
-
+                    finished_episodes += 1
                     current_episode_failures = 0
+
+                    t1 = time.time()
+                    t_delta = t1 - t0
+                    logger.info(
+                        f"Episode {finished_episodes}/{num_episodes} completed in {t_delta:.2f} seconds ({t_delta / 60:.2f} minutes)")
+                    logger.info(
+                        f"Total time calculating actions: {total_time_actions:.2f}s ({(total_time_actions / n_steps) * 1000} ms/step)")
+                    logger.info(
+                        f"Total time performing steps: {total_time_steps:.2f}s ({(total_time_steps / n_steps) * 1000} ms/step)")
+
+                    if other_agents:
+                        if timesteps[0].reward > 0:
+                            num_wins += 1
+                        elif timesteps[0].reward < 0:
+                            num_losses += 1
+                        else:
+                            num_draws += 1
+                        logger.info(f"Main agent results: [{num_wins}/{num_draws}/{num_losses}]")
+                        win_rate = 100 * num_wins / finished_episodes
+                        logger.info(f"Win rate for main agent: {win_rate:.2f}%")
 
                     if finished_episodes % save_frequency_episodes == 0:
                         logger.info(f"Saving agent after {finished_episodes} episodes")
