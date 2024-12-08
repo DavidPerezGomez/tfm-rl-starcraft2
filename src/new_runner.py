@@ -306,7 +306,7 @@ def _get_dqn_buffer(config_section):
 
     if buffer_file is not None:
         buffer_path = model_path / buffer_file
-        if buffer_path.exists():
+        if buffer_path.exists() and buffer_path.is_file():
             logger.info(f"Using buffer from file {buffer_path}")
             with open(buffer_path, mode="rb") as f:
                 buffer = pickle.load(f)
@@ -325,10 +325,14 @@ def _get_dqn_buffer(config_section):
 def _create_random_agent(cls, config_section, log_name):
     map_name = _CONFIG.get(config_section, "map")
     map_config = MAP_CONFIGS[map_name]
+    reward_mode = _reward_mode_to_enum(_CONFIG.get(config_section, "reward_mode"))
+    score_method = _CONFIG.get(config_section, "score_method")
     action_masking = _CONFIG.getboolean(config_section, "action_masking")
 
     return cls(map_name=map_name,
                map_config=map_config,
+               reward_mode=reward_mode,
+               score_method=score_method,
                action_masking=action_masking,
                log_name=log_name,)
 
