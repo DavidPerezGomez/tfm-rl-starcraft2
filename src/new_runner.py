@@ -3,6 +3,8 @@ import io
 import logging
 import time
 import pickle
+
+import numpy as np
 from absl import app,flags
 from pathlib import Path
 
@@ -140,6 +142,9 @@ def _train(main_agent, other_agents, tracker: OfflineEmissionsTracker):
         total_emissions = tracker.stop()
         logger.info(f"Total emissions after {finished_episodes} episodes for agent {main_agent._log_name} (and {len(other_agents)} other agents): {total_emissions:.2f}")
 
+        num_episodes = _CONFIG.getint("train", "num_episodes")
+        return finished_episodes == num_episodes
+
     except KeyboardInterrupt:
         pass
 
@@ -151,6 +156,8 @@ def _run_episodes(main_agent, other_agents, mode):
     export_stats_only = _CONFIG.getboolean(mode, "export_stats_only")
     num_episodes = _CONFIG.getint(mode, "num_episodes")
     save_frequency_episodes = _CONFIG.getint(mode, "save_frequency_episodes")
+    early_stopping_interval = _CONFIG.getint(mode, "early_stopping_interval")
+    reward_mode = _reward_mode_to_enum(_CONFIG.get(mode, "reward_mode"))
 
     logger = MainLogger.get()
 
@@ -158,6 +165,8 @@ def _run_episodes(main_agent, other_agents, mode):
     max_episode_failures = 5
     current_episode_failures = 0
     num_wins, num_draws, num_losses = 0, 0, 0
+    prev_mean_reward = -np.inf
+    episodes_without_improvement = 0
     logger.info(f"Beginning agent {mode}")
     while current_episode_failures < max_episode_failures:
         try:
@@ -231,6 +240,18 @@ def _run_episodes(main_agent, other_agents, mode):
                         else:
                             main_agent.save(save_path)
                         already_saved = True
+
+                    mean_reward = main_agent.current_aggregated_episode_stats.mean_rewards(
+                        stage=main_agent._current_agent_stage().name, last_n=10,
+                        reward_mode=reward_mode)
+                    if mean_reward <= prev_mean_reward:
+                        episodes_without_improvement += 1
+                        if 0 < early_stopping_interval <= episodes_without_improvement:
+                            logger.info(f"Stopping early after {finished_episodes} episodes")
+                            break
+                    else:
+                        episodes_without_improvement = 0
+                    prev_mean_reward = mean_reward
             break
 
         except ConnectError as error:
@@ -259,6 +280,9 @@ def _exploit(main_agent, other_agents):
         main_agent.set_tracker(None)
         main_agent.exploit()
         finished_episodes = _run_episodes(main_agent, other_agents, "exploit")
+
+        num_episodes = _CONFIG.getint("exploit", "num_episodes")
+        return finished_episodes == num_episodes
 
     except KeyboardInterrupt:
         pass
@@ -706,7 +730,7 @@ def main(argv):
 
     SC2_CONFIG["visualize"] = _CONFIG.getboolean(mode, "visualize")
 
-    map_name = _CONFIG.get("train", "map")
+    map_name = _CONFIG.get(mode, "map")
     map_config = MAP_CONFIGS[map_name]
 
     main_agent = _get_agent(mode)
@@ -722,11 +746,13 @@ def main(argv):
     start_marker_file.touch(exist_ok=True)
 
     if mode == "train":
-        _train(main_agent, other_agents, tracker)
+        finished = _train(main_agent, other_agents, tracker)
     else:
-        _exploit(main_agent, other_agents)
+        finished = _exploit(main_agent, other_agents)
 
     end_marker_file.touch(exist_ok=True)
+
+    return int(not finished)
 
 
 if __name__ == "__main__":
