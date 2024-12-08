@@ -374,8 +374,23 @@ def _create_dqn(cls = None, config_section = None, log_name: str = None):
     return dqn
 
 
-def _load_dqn(network_path):
+def _load_dqn(network_path, config_section):
+    logger = MainLogger.get()
+
     dqn = torch.load(network_path)
+
+    if _CONFIG.has_option(config_section, "lr"):
+        logger.info("Updating network optimizer")
+        learning_rate = _CONFIG.getfloat(config_section, "lr")
+
+        if _CONFIG.has_option(config_section, "lr"):
+            str_lr_milestones = _CONFIG.get(config_section, "lr_milestones").split(",")
+            lr_milestones = [int(n) for n in str_lr_milestones] if any(str_lr_milestones) else []
+        else:
+            lr_milestones = []
+
+        dqn.add_optimizer(learning_rate, lr_milestones)
+
     return dqn
 
 
@@ -422,9 +437,9 @@ def _load_single_dqn_agent(cls, config_section, log_name):
         main_network_file = Path(_CONFIG.get(config_section, "main_network_file"))
         target_network_file = Path(_CONFIG.get(config_section, "target_network_file"))
         logger.info(f"Loading main network from file {main_network_file}")
-        main_network = _load_dqn(main_network_file)
+        main_network = _load_dqn(main_network_file, config_section)
         logger.info(f"Loading target network from file {target_network_file}")
-        target_network = _load_dqn(target_network_file)
+        target_network = _load_dqn(target_network_file, config_section)
         return _create_single_dqn_agent(cls, main_network, target_network, config_section, log_name)
     else:
         logger.info(f"Loading agent from file {model_path / cls._AGENT_FILE}")
@@ -518,9 +533,9 @@ def _load_multi_dqn_agent(cls, base_manager, army_recruit_manager, army_attack_m
         main_network_file = Path(_CONFIG.get(config_section, "main_network_file"))
         target_network_file = Path(_CONFIG.get(config_section, "target_network_file"))
         logger.info(f"Loading main network from file {main_network_file}")
-        main_network = _load_dqn(main_network_file)
+        main_network = _load_dqn(main_network_file, config_section)
         logger.info(f"Loading target network from file {target_network_file}")
-        target_network = _load_dqn(target_network_file)
+        target_network = _load_dqn(target_network_file, config_section)
         return _create_multi_dqn_agent(cls,
                                        base_manager,
                                        army_recruit_manager,

@@ -23,6 +23,8 @@ class DQNNetwork(WithLogger, nn.Module, ABC):
         self.input_shape = observation_space_shape #env.observation_space.shape[0]
         self.n_outputs = num_actions #env.action_space.n
         self.actions = list(range(self.n_outputs))
+        self.optimizer = None
+        self.scheduler = None
 
         if torch.cuda.is_available():
             self.device = 'cuda'
@@ -35,14 +37,19 @@ class DQNNetwork(WithLogger, nn.Module, ABC):
             model_layers = self._get_model_layers_from_number_of_units(layer_units=model_layers, num_inputs=observation_space_shape, num_outputs=num_actions)
 
         model = torch.nn.Sequential(*model_layers)
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+        self.model = model.to(device=self.device)
+
+        self.add_optimizer(learning_rate, lr_milestones)
+
+
+    def add_optimizer(self, learning_rate: float, lr_milestones: list[int] = None):
+        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
 
         if lr_milestones is not None and any(lr_milestones):
             scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=0.1)
         else:
             scheduler = None
 
-        self.model = model.to(device=self.device)
         self.optimizer = optimizer
         self.scheduler = scheduler
 
