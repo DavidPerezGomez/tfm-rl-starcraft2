@@ -80,7 +80,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_action = None
         self._prev_action_args = None
         self._prev_action_is_valid = None
-        self._prev_score = 0.
         self._current_score = 0.
         self._current_reward = 0.
         self._current_adjusted_reward = 0.
@@ -305,7 +304,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_action = None
         self._prev_action_args = None
         self._prev_action_is_valid = None
-        self._prev_score = 0.
         self._current_score = 0.
         self._current_reward = 0.
         self._current_adjusted_reward = 0.
@@ -823,7 +821,6 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self.logger.debug(f"Previous action {a[self._reward_mode][0]}: {a[self._reward_mode][1]}")
 
     def post_step(self, obs: TimeStep, action: AllActions, action_args: Dict[str, Any], original_action: AllActions, original_action_args: Dict[str, Any], is_valid_action: bool):
-        self._prev_score = obs.observation.score_cumulative.score
         self._prev_state_tuple = self._current_state_tuple
         self._prev_action = self._action_to_idx[original_action]
         self._prev_action_args = original_action_args
