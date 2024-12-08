@@ -17,11 +17,11 @@ class GameManagerDQNAgent(GameManagerBaseAgent, DQNAgent):
     @override
     def burnin(self):
         super().burnin()
-        if hasattr(self._base_manager, "burnin") and callable(getattr(self._base_manager, "burning")):
+        if hasattr(self._base_manager, "burnin") and callable(getattr(self._base_manager, "burnin")):
             self._base_manager.burnin()
-        if hasattr(self._army_recruit_manager, "burnin") and callable(getattr(self._army_recruit_manager, "burning")):
+        if hasattr(self._army_recruit_manager, "burnin") and callable(getattr(self._army_recruit_manager, "burnin")):
             self._army_recruit_manager.burnin()
-        if hasattr(self._army_attack_manager, "burnin") and callable(getattr(self._army_attack_manager, "burning")):
+        if hasattr(self._army_attack_manager, "burnin") and callable(getattr(self._army_attack_manager, "burnin")):
             self._army_attack_manager.burnin()
 
     @override
