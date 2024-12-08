@@ -327,6 +327,8 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self.current_agent_stats.episode_count += 1
         self.current_agent_stats.episode_count_per_stage[current_stage] += 1
 
+        self.setup_actions()
+
     @property
     def is_training(self):
         return self._train
@@ -811,9 +813,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         reward, adjusted_reward, score = self.get_reward_and_score(obs, eval_step)
 
-        if not eval_step:
-            self.setup_actions()
-        else:
+        if eval_step:
             self._current_episode_stats.reward += reward
             self._current_episode_stats.adjusted_reward += adjusted_reward
             self._current_episode_stats.score += score
