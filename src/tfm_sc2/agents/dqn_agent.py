@@ -193,7 +193,6 @@ class DQNAgent(BaseAgent):
     def is_burnin(self):
         return self._burnin
 
-
     def select_action(self, obs: TimeStep) -> Tuple[AllActions, Dict[str, Any], bool]:
         if self._action_masking:
             available_actions = self._available_actions
@@ -327,7 +326,7 @@ class DQNAgent(BaseAgent):
         # Get q-values from the target network
         if self._action_masking:
             # Select max q-value from available actions for each experience
-            nsaa_mask = torch.BoolTensor(next_state_available_actions).to(device=self.device)
+            nsaa_mask = torch.BoolTensor(np.array(next_state_available_actions)).to(device=self.device)
             masked_qvals = torch.where(nsaa_mask, self.target_network.get_qvals(next_states), -torch.inf)
             qvals_next = torch.max(masked_qvals, dim=-1)[0].detach()
         else:
