@@ -93,6 +93,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_total_damage_dealt = 0
         self._prev_total_damage_taken = 0
         self._prev_minerals = 0
+        self._prev_minerals_gathered = 0
         self._prev_army_spending = 0
         self._prev_diff_marines = 0
         self._prev_health_difference_score = 0
@@ -315,6 +316,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_total_damage_dealt = 0
         self._prev_total_damage_taken = 0
         self._prev_minerals = 0
+        self._prev_minerals_gathered = 0
         self._prev_army_spending = 0
         self._prev_diff_marines = 0
         self._prev_health_difference_score = 0
@@ -623,6 +625,17 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             prev = self._prev_minerals
             delta = minerals - prev
             self._prev_minerals = minerals
+            return delta
+
+    def get_minerals_gathered_delta(self, obs: TimeStep) -> float:
+        minerals_gathered = obs.observation.score_cumulative.collected_minerals
+        if obs.first():
+            self._prev_minerals_gathered = minerals_gathered
+            return 0
+        else:
+            prev = self._prev_minerals_gathered
+            delta = minerals_gathered - prev
+            self._prev_minerals_gathered = minerals_gathered
             return delta
 
     def get_army_spending(self) -> float:
