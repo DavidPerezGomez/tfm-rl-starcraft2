@@ -234,8 +234,8 @@ class DQNAgent(BaseAgent):
     def pre_step(self, obs: TimeStep, eval_step: bool = True):
         super().pre_step(obs, eval_step)
 
+        done = obs.last()
         if eval_step:
-            done = obs.last()
             if not self._exploit and self._buffer is not None:
                 ohe_available_actions = self._actions_to_network(self._available_actions)
                 self._buffer.append(self._prev_state_tuple, self._prev_action, self._prev_action_args,
@@ -273,19 +273,23 @@ class DQNAgent(BaseAgent):
                     if not target_net_updated:
                         self.synchronize_target_network()
 
-                    self._current_episode_stats.epsilon = self.epsilon if not self._random_mode else 1.
-                    self._current_episode_stats.loss = np.mean(self._current_episode_stats.losses)
-                    self.epsilon = max(self.epsilon * self.hyperparams.epsilon_decay, self.hyperparams.min_epsilon)
-            elif done and self.is_burnin:
-                self._current_episode_stats.epsilon = 1.
-            elif done and self._exploit:
+        if done:
+            if self.is_training:
+                self._current_episode_stats.epsilon = self.epsilon if not self._random_mode else 1.
+                self._current_episode_stats.loss = np.mean(self._current_episode_stats.losses)
+                self.epsilon = max(self.epsilon * self.hyperparams.epsilon_decay, self.hyperparams.min_epsilon)
+                self.main_network.step_lr()
+                self.target_network.step_lr()
+            elif self._exploit:
                 self._current_episode_stats.epsilon = 0.
+            else:
+                self._current_episode_stats.epsilon = 1.
 
     def post_step(self, obs: TimeStep, action: AllActions, action_args: Dict[str, Any], original_action: AllActions, original_action_args: Dict[str, Any], is_valid_action: bool):
-        super().post_step(obs, action, action_args, original_action, original_action_args, is_valid_action)
-
         if obs.last():
             self._current_episode_stats.is_random_mode = self._random_mode
+
+        super().post_step(obs, action, action_args, original_action, original_action_args, is_valid_action)
 
     def _get_end_of_episode_info_components(self) -> List[str]:
         return super()._get_end_of_episode_info_components() + [

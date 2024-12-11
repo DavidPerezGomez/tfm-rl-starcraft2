@@ -95,7 +95,7 @@ class DQNNetwork(WithLogger, nn.Module, ABC):
     def get_greedy_action(self, state: Union[np.ndarray, list, tuple], valid_actions: List = None):
         state_tensor = torch.Tensor(state).to(device=self.device)
         qvals = self.get_qvals(state_tensor)
-        self.logger.debug(f"Selecting greedy action with q-vals {qvals}.")
+        self.logger.debug(f"Selecting greedy action with q-vals {qvals} and mask {valid_actions}.")
         if valid_actions is not None:
             invalid_indices = np.where(valid_actions == 0)[0]
             qvals[invalid_indices] = -torch.inf
