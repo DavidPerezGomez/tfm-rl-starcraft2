@@ -135,10 +135,21 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
             self._select_proxy_agent()
 
         if self._prev_proxy_agent is not None:
+            # pre-step on previous proxy agent to get reward
             self._prev_proxy_agent.pre_step(obs, not obs.first())
 
-        if self._prev_proxy_agent != self._proxy_agent:
+        if  self._prev_proxy_agent != self._proxy_agent:
+            # on proxy agent switch pre-step new proxy agent
             self._proxy_agent.pre_step(obs, False)
+
+        if obs.last():
+            # pre_step on all non-proxy agents to update stats
+            if self._proxy_agent != self._base_manager and self._prev_proxy_agent != self._base_manager:
+                self._base_manager.pre_step(obs, False)
+            if self._proxy_agent != self._army_recruit_manager and self._prev_proxy_agent != self._army_recruit_manager:
+                self._army_recruit_manager.pre_step(obs, False)
+            if self._proxy_agent != self._army_attack_manager and self._prev_proxy_agent != self._army_attack_manager:
+                self._army_attack_manager.pre_step(obs, False)
 
         action, action_args, is_valid_action = self._proxy_agent.select_action(obs=obs)
 
