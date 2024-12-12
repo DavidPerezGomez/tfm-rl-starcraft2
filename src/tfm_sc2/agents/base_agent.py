@@ -92,8 +92,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_total_damage_dealt = 0
         self._prev_total_damage_taken = 0
         self._prev_minerals = 0
+        self._prev_collection_rate = 0
         self._prev_minerals_gathered = 0
         self._prev_army_spending = 0
+        self._base_efficiency = 0
         self._prev_diff_marines = 0
         self._prev_health_difference_score = 0
         self._prev_game_score = 0
@@ -314,8 +316,10 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_total_damage_dealt = 0
         self._prev_total_damage_taken = 0
         self._prev_minerals = 0
+        self._prev_collection_rate = 0
         self._prev_minerals_gathered = 0
         self._prev_army_spending = 0
+        self._base_efficiency = 0
         self._prev_diff_marines = 0
         self._prev_health_difference_score = 0
         self._prev_game_score = 0
@@ -616,6 +620,20 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
         return total_army_health - enemy_total_army_health
 
+
+    def get_mineral_collection_rate_delta(self, obs: TimeStep) -> float:
+        step_cost = 5
+        collection_rate = obs.observation.score_cumulative.collection_rate_minerals
+        if obs.first():
+            self._prev_collection_rate = collection_rate
+            return 0
+        else:
+            prev = self._prev_collection_rate
+            delta = collection_rate - prev
+            self._prev_collection_rate = collection_rate
+            return delta - step_cost
+
+
     def get_mineral_count_delta(self, obs: TimeStep) -> float:
         minerals = obs.observation.player.minerals
         if obs.first():
@@ -637,6 +655,36 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             delta = minerals_gathered - prev
             self._prev_minerals_gathered = minerals_gathered
             return delta
+
+    def base_efficiency(self) -> float:
+        harvester_full_value, harvester_half_value = 1, 0.5
+        full_value_threshold, half_value_threshold = 16, 24
+
+        def command_center_efficiency(command_center):
+            assigned_harvesters = command_center.assigned_harvesters
+            full_harvesters_value = harvester_full_value * min(full_value_threshold, assigned_harvesters)
+            half_harvesters_value = harvester_half_value * min((half_value_threshold - full_value_threshold),
+                                                               max(0, assigned_harvesters - full_value_threshold))
+            return full_harvesters_value + half_harvesters_value
+
+        command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter, completed_only=True)
+        base_efficiency = sum(command_center_efficiency(cc) for cc in command_centers)
+
+        return base_efficiency
+
+    def get_base_efficiency_delta(self, obs: TimeStep) -> float:
+        base_efficiency = self.base_efficiency()
+        step_cost = 0.08
+        if obs.first():
+            self._base_efficiency = base_efficiency
+            return 0
+        else:
+            prev = self._base_efficiency
+            delta = base_efficiency - prev
+            self._base_efficiency = base_efficiency
+            if delta == 0 and base_efficiency >= 60:
+                step_cost = 0
+            return delta - step_cost
 
     def get_army_spending(self) -> float:
         barracks = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Barracks)
@@ -737,15 +785,18 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
                     + get_units_value(workers, SC2Costs.SCV) \
                     + workers_in_progress * SC2Costs.SCV.minerals * unit_in_progress_factor
 
-        ally_score = get_player_score(PlayerRelative.SELF)
+        # ally_score = get_player_score(PlayerRelative.SELF)
         enemy_score = get_player_score(PlayerRelative.ENEMY)
 
-        return ally_score - enemy_score
+        # return ally_score - enemy_score
+        return -enemy_score
 
 
     def get_game_score_delta(self, obs: TimeStep) -> float:
+        # win_factor = 5000
+        # step_cost = 50
         win_factor = 1000
-        step_cost = 5
+        step_cost = 10
         game_score = self.get_game_score()
         if obs.first():
             self._prev_game_score = 0
