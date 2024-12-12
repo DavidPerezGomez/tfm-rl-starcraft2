@@ -369,7 +369,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         try:
             match action:
                 case AllActions.NO_OP:
-                    action_args = None
+                    action_args = {}
                 case AllActions.HARVEST_MINERALS:
                     minerals = [unit for unit in self._get_units(alliances=PlayerRelative.NEUTRAL) if Minerals.contains(unit.unit_type)]
                     assert (len(minerals) > 0), "There are no minerals to harvest"
@@ -494,7 +494,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             return action_args, True
         except AssertionError as error:
             self.logger.debug(error)
-            return None, False
+            return {}, False
 
     def get_next_command_center_position(self) -> Position:
         next_pos = None
@@ -868,8 +868,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self._current_episode_stats.score += score
             self._current_episode_stats.steps += 1
             self.current_agent_stats.step_count += 1
-            a = {RewardMode.SCORE: ("score", score), RewardMode.ADJUSTED_REWARD: ("adjusted reward", adjusted_reward), RewardMode.REWARD: ("reward", reward)}
-            self.logger.debug(f"Previous action {a[self._reward_mode][0]}: {a[self._reward_mode][1]}")
+
+        a = {RewardMode.SCORE: ("score", score), RewardMode.ADJUSTED_REWARD: ("adjusted reward", adjusted_reward), RewardMode.REWARD: ("reward", reward)}
+        self.logger.debug(f"Previous action {a[self._reward_mode][0]}: {a[self._reward_mode][1]}")
 
     def post_step(self, obs: TimeStep, action: AllActions, action_args: Dict[str, Any], original_action: AllActions, original_action_args: Dict[str, Any], is_valid_action: bool):
         self._prev_state_tuple = self._current_state_tuple
@@ -966,7 +967,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         if not is_valid_action:
             self.logger.debug(f"Action {action.name} is not valid anymore, returning NO_OP")
             action = AllActions.NO_OP
-            action_args = None
+            action_args = {}
 
         if is_valid_action:
             self.logger.debug(f"[Step {self.steps}] Performing action {action.name} with args: {action_args}")

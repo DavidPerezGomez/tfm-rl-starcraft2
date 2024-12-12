@@ -238,9 +238,11 @@ class DQNAgent(BaseAgent):
         if eval_step:
             if not self._exploit and self._buffer is not None:
                 ohe_available_actions = self._actions_to_network(self._available_actions)
-                self._buffer.append(self._prev_state_tuple, self._prev_action, self._prev_action_args,
-                                    self._current_reward, self._current_adjusted_reward, self._current_score, done,
-                                    self._current_state_tuple, ohe_available_actions)
+                experience = [self._prev_state_tuple, self._prev_action, self._prev_action_args,
+                              self._current_reward, self._current_adjusted_reward, self._current_score, done,
+                              self._current_state_tuple, ohe_available_actions]
+                assert all([x is not None for x in experience]), f"Attempted to store null value in experience buffer: {experience}"
+                self._buffer.append(*experience)
 
             # do updates
             if (not self.is_burnin) and self.is_training:

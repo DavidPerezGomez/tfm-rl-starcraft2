@@ -158,13 +158,13 @@ class GameManagerBaseAgent(WithGameManagerActions, BaseAgent, ABC):
         if not is_valid_action:
             self.logger.debug(f"Sub-agent action {action.name} is not valid anymore, returning NO_OP")
             action = AllActions.NO_OP
-            action_args = None
+            action_args = {}
             self._current_episode_stats.add_invalid_action(self._current_game_manager_action)
         else:
             self._current_episode_stats.add_valid_action(self._current_game_manager_action)
             self.logger.debug(f"[Step {self.steps}] Manager action: {self._current_game_manager_action.name} // Sub-agent action {action.name} (original action = {original_action})")
 
-        self.post_step(obs, self._current_game_manager_action, None, self._current_game_manager_action, None, True)
+        self.post_step(obs, self._current_game_manager_action, {}, self._current_game_manager_action, {}, True)
         self._proxy_agent.post_step(obs, action, action_args, original_action, original_action_args, is_valid_action)
         if obs.last():
             if self._proxy_agent != self._base_manager:
