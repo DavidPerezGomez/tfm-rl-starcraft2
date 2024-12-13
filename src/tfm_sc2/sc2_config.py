@@ -59,8 +59,6 @@ MAP_CONFIGS = dict(
             # sc2_env.Bot(sc2_env.Race.random, sc2_env.Difficulty.very_easy),
         ],
         available_actions=list(AllActions),
-        # Baseline reward of 100
-        get_score_method="get_game_score_delta",
     ),
     CollectMineralsAndGas=dict(
         map_name="CollectMineralsAndGas",
@@ -75,8 +73,6 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(BaseManagerActions),
-        # Aim for a
-        get_score_method="get_mineral_collection_rate_difference",
     ),
     CollectMineralsRandom=dict(
         map_name="CollectMineralsRandom",
@@ -90,7 +86,6 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(BaseManagerActions),
-        get_score_method="get_mineral_count_delta",
     ),
     CollectMineralsFixed=dict(
         map_name="CollectMineralsFixed",
@@ -104,7 +99,19 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(BaseManagerActions),
-        get_score_method="get_mineral_count_delta",
+    ),
+    SaturateHarvesters=dict(
+        map_name="SaturateHarvesters",
+        positions={
+            units.Terran.CommandCenter: [(25, 40), (25, 30), (38, 30)],
+            units.Terran.SupplyDepot:
+                [(x, y) for x in range(32, 42+1, 2) for y in range(38, 47+1, 3)] # 24 supply depots
+            ,
+            units.Terran.Barracks: [],
+        },
+        multiple_positions=False,
+        players=[sc2_env.Agent(sc2_env.Race.terran)],
+        available_actions=list(BaseManagerActions),
     ),
     BuildMarinesRandom=dict(
         map_name="BuildMarinesRandom",
@@ -119,7 +126,6 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(ArmyRecruitManagerActions),
-        get_score_method="get_army_spending_delta",
     ),
     BuildMarinesFixed=dict(
         map_name="BuildMarinesFixed",
@@ -134,7 +140,6 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(ArmyRecruitManagerActions),
-        get_score_method="get_army_spending_delta",
     ),
     DefeatRoaches=dict(
         map_name="DefeatRoaches",
@@ -146,7 +151,6 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(ArmyAttackManagerActions),
-        get_score_method="get_reward_as_score",
     ),
     DefeatZerglingsAndBanelings=dict(
         map_name="DefeatRoaches",
@@ -159,8 +163,6 @@ MAP_CONFIGS = dict(
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(ArmyAttackManagerActions),
         reward_factor=120,
-        # Baseline reward of 100
-        get_score_method="get_reward_as_score",
     ),
     DefeatBase=dict(
         map_name="DefeatBase",
@@ -172,7 +174,6 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(ArmyAttackManagerActions),
-        get_score_method="get_reward_as_score",
     ),
     DefeatBases=dict(
         map_name="DefeatBases",
@@ -184,6 +185,5 @@ MAP_CONFIGS = dict(
         multiple_positions=False,
         players=[sc2_env.Agent(sc2_env.Race.terran)],
         available_actions=list(ArmyAttackManagerActions),
-        get_score_method="get_health_difference_score_delta",
     )
 )

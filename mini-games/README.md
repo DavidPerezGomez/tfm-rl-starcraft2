@@ -11,6 +11,7 @@ mini_games = [
     "BuildMarinesFixed",  # 600s
     "CollectMineralsRandom",  # 720s
     "CollectMineralsFixed",  # 720s
+    "SaturateHarvesters",  # 720s
     "CollectMineralsAndGas",  # 420s
     "CollectMineralShards",  # 120s
     "DefeatRoaches",  # 120s
