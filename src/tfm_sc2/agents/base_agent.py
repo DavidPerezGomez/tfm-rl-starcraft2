@@ -94,6 +94,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_minerals = 0
         self._prev_collection_rate = 0
         self._prev_minerals_gathered = 0
+        self._economy_score = 0
         self._prev_army_spending = 0
         self._base_efficiency = 0
         self._prev_diff_marines = 0
@@ -318,6 +319,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         self._prev_minerals = 0
         self._prev_collection_rate = 0
         self._prev_minerals_gathered = 0
+        self._economy_score = 0
         self._prev_army_spending = 0
         self._base_efficiency = 0
         self._prev_diff_marines = 0
@@ -645,6 +647,25 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             self._prev_minerals = minerals
             return delta
 
+    def get_economy_score_delta(self, obs: TimeStep) -> float:
+        command_centers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.CommandCenter)
+        depots = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SupplyDepot)
+        workers = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.SCV)
+        n_workers_in_queue = sum([cc.order_length for cc in command_centers])
+        economy_spending = (SC2Costs.COMMAND_CENTER.minerals * len(command_centers)
+                            + SC2Costs.SUPPLY_DEPOT.minerals * len(depots)
+                            + SC2Costs.SCV.minerals * (len(workers) + n_workers_in_queue)) # command centers, supply depots, scvs
+        minerals_gathered = obs.observation.score_cumulative.collected_minerals
+        economy_score = minerals_gathered - economy_spending
+        if obs.first():
+            self._economy_score = economy_score
+            return 0
+        else:
+            prev = self._economy_score
+            delta = economy_score - prev
+            self._economy_score = economy_score
+            return delta
+
     def get_minerals_gathered_delta(self, obs: TimeStep) -> float:
         minerals_gathered = obs.observation.score_cumulative.collected_minerals
         if obs.first():
@@ -730,15 +751,19 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
 
     def get_health_difference_score(self) -> float:
         enemy_buildings = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.BUILDING_UNIT_TYPES)
-        buildings_health = sum([u.health for u in enemy_buildings])
+        enemy_buildings_health = sum([u.health for u in enemy_buildings])
         enemy_workers = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.WORKER_UNIT_TYPES)
-        workers_health = sum([u.health for u in enemy_workers])
+        enemy_workers_health = sum([u.health for u in enemy_workers])
         enemy_army = self._get_units(alliances=PlayerRelative.ENEMY, unit_types=Constants.ARMY_UNIT_TYPES)
-        army_health = sum([u.health for u in enemy_army])
+        enemy_army_health = sum([u.health for u in enemy_army])
+        buildings = self._get_units(alliances=PlayerRelative.SELF, unit_types=Constants.BUILDING_UNIT_TYPES)
+        buildings_health = sum([u.health for u in buildings])
+        workers = self._get_units(alliances=PlayerRelative.SELF, unit_types=Constants.WORKER_UNIT_TYPES)
+        workers_health = sum([u.health for u in workers])
         marines = self._get_units(alliances=PlayerRelative.SELF, unit_types=units.Terran.Marine)
         marines_health = sum([u.health for u in marines])
 
-        return marines_health * 1.1 - (buildings_health + workers_health + army_health)
+        return (marines_health * 1.1 + buildings_health + workers_health) - (enemy_buildings_health + enemy_workers_health + enemy_army_health)
 
     def get_health_difference_score_delta(self, obs: TimeStep) -> float:
         step_cost = 5
@@ -755,7 +780,7 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
     def get_reward_as_score(self, obs: TimeStep) -> float:
         return obs.reward
 
-    def get_game_score(self) -> float:
+    def get_player_score(self, player: PlayerRelative):
         damaged_unit_min_factor = 0.5
         unit_in_progress_factor = 0.25
 
@@ -768,40 +793,44 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
         def get_units_value(units, unit_cost: SC2Costs):
             return sum([unit_cost.minerals * get_unit_factor(u) for u in units])
 
-        def get_player_score(player: PlayerRelative):
-            command_centers = self._get_units(alliances=player, unit_types=units.Terran.CommandCenter)
-            supply_depots = self._get_units(alliances=player, unit_types=units.Terran.SupplyDepot)
-            barracks = self._get_units(alliances=player, unit_types=units.Terran.Barracks)
-            marines = self._get_units(alliances=player, unit_types=units.Terran.Marine)
-            workers = self._get_units(alliances=player, unit_types=units.Terran.SCV)
-            workers_in_progress = sum([cc.order_length for cc in command_centers])
-            marines_in_progress = sum([b.order_length for b in barracks])
+        command_centers = self._get_units(alliances=player, unit_types=units.Terran.CommandCenter)
+        supply_depots = self._get_units(alliances=player, unit_types=units.Terran.SupplyDepot)
+        barracks = self._get_units(alliances=player, unit_types=units.Terran.Barracks)
+        marines = self._get_units(alliances=player, unit_types=units.Terran.Marine)
+        workers = self._get_units(alliances=player, unit_types=units.Terran.SCV)
+        workers_in_progress = sum([cc.order_length for cc in command_centers])
+        marines_in_progress = sum([b.order_length for b in barracks])
 
-            return get_units_value(command_centers, SC2Costs.COMMAND_CENTER) \
-                    + get_units_value(supply_depots, SC2Costs.SUPPLY_DEPOT) \
-                    + get_units_value(barracks, SC2Costs.BARRACKS) \
-                    + get_units_value(marines, SC2Costs.MARINE) \
-                    + marines_in_progress * SC2Costs.MARINE.minerals * unit_in_progress_factor \
-                    + get_units_value(workers, SC2Costs.SCV) \
-                    + workers_in_progress * SC2Costs.SCV.minerals * unit_in_progress_factor
+        return get_units_value(command_centers, SC2Costs.COMMAND_CENTER) \
+                + get_units_value(supply_depots, SC2Costs.SUPPLY_DEPOT) \
+                + get_units_value(barracks, SC2Costs.BARRACKS) \
+                + get_units_value(marines, SC2Costs.MARINE) \
+                + marines_in_progress * SC2Costs.MARINE.minerals * unit_in_progress_factor \
+                + get_units_value(workers, SC2Costs.SCV) \
+                + workers_in_progress * SC2Costs.SCV.minerals * unit_in_progress_factor
 
-        # ally_score = get_player_score(PlayerRelative.SELF)
-        enemy_score = get_player_score(PlayerRelative.ENEMY)
+    def get_game_score(self) -> float:
+        ally_score = self.get_player_score(PlayerRelative.SELF)
+        enemy_score = self.get_player_score(PlayerRelative.ENEMY)
 
-        # return ally_score - enemy_score
-        return -enemy_score
-
+        return ally_score - enemy_score
 
     def get_game_score_delta(self, obs: TimeStep) -> float:
-        # win_factor = 5000
-        # step_cost = 50
-        win_factor = 1000
-        step_cost = 10
-        game_score = self.get_game_score()
         if obs.first():
+            # Enemy base isn't spawned yet on first observation
+            # Hardcode expected score
             self._prev_game_score = 0
             return 0
-        elif obs.last():
+
+        win_factor = 5000 # 1000
+        step_cost = 50 # 10
+        score_max = 4000
+
+        ally_score = min(score_max, self.get_player_score(PlayerRelative.SELF))
+        enemy_score = min(score_max, self.get_player_score(PlayerRelative.ENEMY))
+        game_score = ally_score - enemy_score
+
+        if obs.last():
             self._prev_game_score = game_score
             return win_factor * obs.reward
         else:

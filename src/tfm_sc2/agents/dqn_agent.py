@@ -260,10 +260,10 @@ class DQNAgent(BaseAgent):
                 if self.hyperparams.target_network_sync_frequency > 0:
                     if (self.current_agent_stats.step_count % self.hyperparams.target_network_sync_frequency) == 0:
                         if not self._status_flags["target_net_updated"]:
-                            self.logger.debug(f"First target network update with lr {self.target_network.learning_rate}")
+                            self.logger.debug(f"First target network update")
                             self._status_flags["target_net_updated"] = True
                         else:
-                            self.logger.debug(f"Target network update with lr {self.target_network.learning_rate}")
+                            self.logger.debug(f"Target network update")
                         self.synchronize_target_network()
                         target_net_updated = True
                 # HERE
