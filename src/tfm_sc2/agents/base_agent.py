@@ -823,7 +823,9 @@ class BaseAgent(WithLogger, ABC, base_agent.BaseAgent):
             return 0
 
         win_factor = 5000 # 1000
-        step_cost = 50 # 10
+        step_cost = 10
+        if hasattr(self, "_time_displacement"):
+            step_cost = step_cost * self._time_displacement
         score_max = 4000
 
         ally_score = min(score_max, self.get_player_score(PlayerRelative.SELF))
