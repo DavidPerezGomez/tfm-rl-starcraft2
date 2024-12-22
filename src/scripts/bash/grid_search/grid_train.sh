@@ -4,15 +4,15 @@ if [ -z "${SRC_DIR}" ]; then echo "Environmental variable SRC_DIR needs to be co
 
 cd "${SRC_DIR}"
 
-conf_list=( 01 02 03 04 05 06 07 )
+conf_list=( 01 02 )
 
 for i in ${conf_list[@]};  do
 
-  CONFIG_FILES="conf/default.ini, conf/attack_manager.ini, conf/grid_search/${i}.ini"
+  CONFIG_FILES="conf/default.ini, conf/single_agent.ini, conf/grid_search/${i}.ini"
 
   python "${SRC_DIR}"/new_runner.py \
         --mode "train" \
-        --config_files "${CONFIG_FILES}"
+        --config_files "${CONFIG_FILES}" &&
 
   python "${SRC_DIR}"/new_runner.py \
         --mode "exploit" \

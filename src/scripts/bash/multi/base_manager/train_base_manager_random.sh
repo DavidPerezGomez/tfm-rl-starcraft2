@@ -4,8 +4,8 @@ if [ -z "${SRC_DIR}" ]; then echo "Environmental variable SRC_DIR needs to be co
 
 cd "${SRC_DIR}"
 
-CONFIG_FILES="conf/default.ini, conf/random_base_manager.ini"
+CONFIG_FILES="conf/default.ini, conf/base_manager_random.ini"
 
 python "${SRC_DIR}"/new_runner.py \
-      --mode "exploit" \
+      --mode "train" \
       --config_files "${CONFIG_FILES}"
