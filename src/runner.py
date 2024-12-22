@@ -718,7 +718,7 @@ def main(argv):
     config_files = FLAGS.config_files
 
     _CONFIG.read(config_files)
-    flags.FLAGS(["new_runner"])
+    flags.FLAGS(["runner"])
 
     _setup_logging(_CONFIG.get(mode, "log_file"))
     logger = MainLogger.get()

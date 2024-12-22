@@ -6,6 +6,6 @@ cd "${SRC_DIR}"
 
 CONFIG_FILES="conf/default.ini, conf/recruit_manager.ini"
 
-python "${SRC_DIR}"/new_runner.py \
+python "${SRC_DIR}"/runner.py \
       --mode "train" \
       --config_files "${CONFIG_FILES}"
