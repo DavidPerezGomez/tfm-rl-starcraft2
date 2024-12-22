@@ -75,15 +75,15 @@ def _run_burnin(main_agent, other_agents):
                     players=map_config["players"],
                     **SC2_CONFIG) as env:
 
-                main_agent.setup(env.observation_spec(), env.action_spec())
                 for a in other_agents:
                     a.setup(env.observation_spec(), env.action_spec())
+                main_agent.setup(env.observation_spec(), env.action_spec())
 
                 while is_burnin and (burnin_episodes < max_burnin_episodes):
                     timesteps = env.reset()
-                    main_agent.reset()
                     for a in other_agents:
                         a.reset()
+                    main_agent.reset()
                     episode_ended = timesteps[0].last()
                     while not episode_ended:
                         step_actions = [a.step(timestep) for a, timestep in zip([main_agent, *other_agents], timesteps)]
@@ -175,9 +175,9 @@ def _run_episodes(main_agent, other_agents, mode):
                     players=map_config["players"],
                     **SC2_CONFIG) as env:
 
-                main_agent.setup(env.observation_spec(), env.action_spec())
                 for a in other_agents:
                     a.setup(env.observation_spec(), env.action_spec())
+                main_agent.setup(env.observation_spec(), env.action_spec())
 
                 while finished_episodes < num_episodes:
                     logger.info(f"Starting episode {finished_episodes + 1}")
@@ -185,9 +185,9 @@ def _run_episodes(main_agent, other_agents, mode):
                     already_saved = False
 
                     timesteps = env.reset()
-                    main_agent.reset()
                     for a in other_agents:
                         a.reset()
+                    main_agent.reset()
                     episode_ended = timesteps[0].last()
                     total_time_actions, total_time_steps, n_steps = 0, 0, 0
                     while not episode_ended:
