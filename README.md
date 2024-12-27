@@ -15,10 +15,6 @@ conda activate tfm
 cd tfm-rl-starcraft2
 # Installing the package will also install pysc2==4.0.0, pygame==1.9.6 and protobuf 3.19.6
 pip install -e src/
-# Install pytorch
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-# Install jupyterlab
-pip install jupyterlab
 ```
 
 You can now test running a random agent with this command:
@@ -60,6 +56,56 @@ python -m pysc2.bin.play --rgb_screen_size=1600,1200 --replay "C:/Program Files 
     ret = lib.version_dict(known_versions)
 ```
 
+## PySC2 adjustments
+
+To be able to properly run this project, some adjustments to the PySC2 library are required. The files changed in this section are part of PySC2, and not this project, so the changes will not be added to version control and will need to be reconfigured if the library is updated or reinstalled.
+
+### Unit values
+
+
+
+```python
+  PickupGasPallet500 = 596
+  PickupHugeScrapSalvage = 600
+  PickupMediumScrapSalvage = 599
+  MineralCrystalItem = 1676
+  MineralPallet = 1678
+  MineralShards = 1681
+  NaturalGas = 1679
+  NaturalMineralShards = 1680
+  ProtossGasCrystalItem = 1674
+  PickupSmallScrapSalvage = 598
+  TerranGasCanisterItem = 1673
+  ZergGasPodItem = 1675
+```
+
+### Mini-Games
+
+To be able to run the custom mini-games included in `mini-games/` with PySC2 they need to be added to the StarCraft II maps list, as indicated in the [PySC2 documentation](https://github.com/google-deepmind/pysc2?tab=readme-ov-file#get-the-maps), by copying the map files to the mini-games folder.
+
+`/path/to/StarCraftII/Maps/mini_games/`
+
+Additionally, the maps need to be configured in the PySC2 library by including their names in the file `pysc2/maps/mini_games.py`.
+
+```python
+mini_games = [
+    "BuildMarines",  # 900s
+    "BuildMarinesRandom",  # 600s
+    "BuildMarinesFixed",  # 600s
+    "CollectMineralsRandom",  # 720s
+    "CollectMineralsFixed",  # 720s
+    "SaturateHarvesters",  # 720s
+    "CollectMineralsAndGas",  # 420s
+    "CollectMineralShards",  # 120s
+    "DefeatRoaches",  # 120s
+    "DefeatZerglingsAndBanelings",  # 120s
+    "DefeatBase", # 180s
+    "DefeatBases", # 180s
+    "FindAndDefeatZerglings",  # 180s
+    "MoveToBeacon",  # 120s
+]
+```
+
 ## Maps
 
 ### List maps
@@ -74,8 +120,6 @@ python -m pysc2.bin.map_list
 python -m pysc2.bin.map_list|grep "mini_games"
 ```
 
-
-
 ## Agents
 
 ### Random agent
@@ -88,20 +132,6 @@ python -m pysc2.bin.agent --map CollectMineralShards --feature_screen_size=256 -
 
 ```bash
 python -m pysc2.bin.play --map CollectMineralShards --feature_screen_size=256 --feature_minimap_size=128
-```
-
-### Test agent
-
-```bash
-python -m pysc2.bin.agent --map CollectMineralShards --agent tfm_sc2.rl.agents.test_agent.TestAgent --use_feature_units --use_raw_units
-```
-
-```bash
-python -m pysc2.bin.agent --map DefeatRoaches --agent tfm_sc2.rl.agents.test_agent.TestAgent --use_feature_units --use_raw_units
-```
-
-```bash
-python -m pysc2.bin.agent --map DefeatRoaches --agent tfm_sc2.rl.agents.test_agent.TestAgent --use_feature_units --use_raw_units
 ```
 
 
@@ -133,15 +163,3 @@ The replay should work as expected now:
 ```bash
 python -m pysc2.bin.play --rgb_screen_size=1600,1200 --replay /home/albert/StarCraftII/Replays/RandomAgent/CollectMineralShards_2024-02-04-11-00-02.SC2Replay
 ```
-
-
-
-$ python -m pysc2.bin.agent --map CollectMineralShards --agent tfm_sc2.rl.agents.test_agent.TestAgent
-
-
-
-python -m pysc2.bin.agent --map CollectMineralShards --feature_screen_size=256 --feature_minimap_size=128
-
-python -m pysc2.bin.play --map CollectMineralShards --rgb_screen_size=1080
-
-python -m pysc2.bin.play -rgb_screen_size=1600,1200 --replay /home/albert/StarCraftII/Replays/RandomAgent/CollectMineralShards_2024-02-04-09-58-26.SC2Replay
