@@ -62,7 +62,7 @@ To be able to properly run this project, some adjustments to the PySC2 library a
 
 ### Unit values
 
-
+To be able to reference certain item ids that appear in the PySC2 mini-games, these unit values may need to be added to the `Neutral` enum in `pysc2/lib/units.py`.
 
 ```python
   PickupGasPallet500 = 596
@@ -78,6 +78,10 @@ To be able to properly run this project, some adjustments to the PySC2 library a
   TerranGasCanisterItem = 1673
   ZergGasPodItem = 1675
 ```
+
+After that, the `PickupItems` enum in `src/tfm_sc2/types.py` can be used for convenience.
+
+These are not necessary the train any of the current agents, but this is left documented here in case it becomes relevant in the future.
 
 ### Mini-Games
 
